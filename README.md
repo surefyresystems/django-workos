@@ -23,20 +23,20 @@ By default, a single rule will be installed which is Username/Password which app
 Quick start
 -----------
 
-1. Add "polls" to your INSTALLED_APPS setting like this::
+1. Add "workos_login" to your INSTALLED_APPS setting like this::
 
     INSTALLED_APPS = [
         ...
-        'polls',
+        'workos_login',
     ]
 
-2. Include the polls URLconf in your project urls.py like this::
+2. Update admin if you have `'django.contrib.admin'` in your INSTALLED_APPS replace it with `'workos_login.admin_site.AdminLoginConfig'`.
+If you are already using a custom site admin, you should have it inherit from `workos_login.admin_site.AdminSharedLogin` which will fix the admin backdoor.
 
-    path('polls/', include('polls.urls')),
+3. Change your login urls from `path('accounts/', include('django.contrib.auth.urls'))`  to `path('accounts/', include('workos_login.urls'))`
 
-3. Run ``python manage.py migrate`` to create the polls models.
+4. Run ``python manage.py migrate`` to create the polls models.
 
-4. Start the development server and visit http://127.0.0.1:8000/admin/
-   to create a poll (you'll need the Admin app enabled).
+5. Update your logo by creating a file called registration/logo.html and add an `img` tag.
+6. Optionally set your bootstrap location by overriding `registration/bootstrap.html` and have a single `link` tag to your bootstrap stylesheet (javascript bootstrap file is not required)
 
-5. Visit http://127.0.0.1:8000/polls/ to participate in the poll.
