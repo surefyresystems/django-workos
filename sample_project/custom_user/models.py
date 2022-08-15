@@ -1,0 +1,24 @@
+from django.core.mail import send_mail
+from django.db import models
+
+# Create your models here.
+from django.contrib.auth.models import AbstractUser
+from django.dispatch import receiver
+
+from workos_login.signals import workos_send_magic_link
+
+
+class User(AbstractUser):
+    is_external = models.BooleanField(default=False)
+
+
+class Profile(models.Model):
+    organization_name = models.CharField(blank=True, max_length=255)
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+
+
+@receiver(workos_send_magic_link)
+def my_handler(sender, **kwargs):
+    email = kwargs["user"].email
+    link = kwargs["link"]
+    send_mail("New login link", link, "dustingtorres@gmail.com", [email])

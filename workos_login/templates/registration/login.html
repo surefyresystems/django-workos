@@ -1,0 +1,163 @@
+{% extends 'registration/base_registration.html' %}
+{% load i18n %}
+{% block card_body %}
+
+  <form action="{{ app_path }}" method="post" id="login-form">{% csrf_token %}
+
+    {% if user.is_authenticated %}
+      <div class="alert alert-info">You are currently logged in as {{ user.username }}.
+        You can log in as a different user or choose to <a href="{{ login_home }}">return home</a>.
+      </div>
+    {% endif %}
+    {% include 'registration/form.html' %}
+
+    {#  <div class="mb-3"><a href="{% url 'password_reset' %}">Forgot your password?</a></div> #}
+
+  </form>
+  <div class="d-flex justify-content-between my-2">
+    <div>
+      {% if user.is_authenticated %}
+        {# The user is authenticated but trying to get to a privledged area. Add a return home link. #}
+        <a href="{{ login_home }}" class="btn btn-lg btn-warning mr-2 ms-2">
+          {% translate 'Return Home' %}
+        </a>
+
+      {% endif %}
+      <button class="btn btn-lg btn-primary d-none" id="btn-back">
+        {% translate 'Back' %}
+      </button>
+    </div>
+    <div>
+      <button class="btn btn-lg btn-primary" id="btn-next">
+        {% translate 'Next' %}
+      </button>
+    </div>
+  </div>
+{% endblock %}
+
+{% block javascript %}
+  <script type="text/javascript">
+    let step = 1;
+
+    function setValue(id, value) {
+      document.getElementById(id).value = value;
+    }
+
+    function showItem(id) {
+      document.getElementById(id).classList.remove("d-none")
+    }
+
+    function hideItem(id) {
+      document.getElementById(id).classList.add("d-none")
+    }
+
+    function hideInput(id) {
+      document.getElementById(id).parentElement.classList.add("d-none")
+    }
+
+    function showInput(id) {
+      const input = document.getElementById(id);
+      input.parentElement.classList.remove("d-none")
+      input.focus()
+
+    }
+
+    function disableItem(id) {
+      document.getElementById(id).disabled = true
+    }
+
+    function enableItem(id) {
+      document.getElementById(id).disabled = false;
+    }
+
+    function focusItem(id) {
+      document.getElementById(id).focus();
+    }
+
+    function incrementStep(){
+      step++;
+      showItem("btn-back")
+    }
+
+    function decrementStep() {
+      step--;
+      if(step === 1){
+        hideItem("btn-back")
+      }
+    }
+
+    function submitOnEnter(id){
+      document.getElementById(id).addEventListener("keypress", function(event){
+        if(event.code === "Enter"){
+          next();
+          event.preventDefault();
+        }
+      })
+    }
+
+    function reqListener () {
+      const response = JSON.parse(this.responseText);
+      const rule = response.rule;
+      const method = response.method;
+      if(method === 'username' || method === 'mfa'){
+        showInput('id_password');
+      }
+      disableItem("id_username");
+      incrementStep();
+      if(method === 'sso' || method === 'magic'){
+        // No more work to do - go next again
+        next()
+      }
+    }
+
+    function submitForm() {
+      enableItem("id_username");
+      hideItem("btn-back");
+      document.getElementById("login-form").submit()
+    }
+
+    function next() {
+      switch (step){
+        case 1:
+          fetchMethod();
+          break;
+        case 2:
+          submitForm();
+          break;
+      }
+
+    }
+
+    function back() {
+      switch(step) {
+        case 2:
+          decrementStep();
+          hideInput('id_password');
+          setValue('id_password', '');
+          enableItem('id_username');
+          focusItem('id_username');
+          break
+      }
+    }
+
+    function fetchMethod() {
+      const oReq = new XMLHttpRequest();
+      const username = document.getElementById("id_username");
+      if(username.checkValidity()){
+        oReq.addEventListener("load", reqListener);
+        oReq.open("GET", "{% url 'login_method' %}"+"?username="+encodeURIComponent(username.value));
+        oReq.send();
+      } else {
+        username.reportValidity();
+        return false
+      }
+      return true
+    }
+
+    document.getElementById('btn-next').addEventListener("click", next);
+    document.getElementById('btn-back').addEventListener("click", back);
+    hideInput('id_password');
+    submitOnEnter("id_password");
+    submitOnEnter("id_username");
+  </script>
+{% endblock %}

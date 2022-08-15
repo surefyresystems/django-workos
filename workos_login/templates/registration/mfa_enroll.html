@@ -1,0 +1,39 @@
+{% extends 'registration/base_registration.html' %}
+{% load i18n %}
+{% if is_totp %}
+  {% block card_img %}
+  {% endblock %}
+{% endif %}
+{% block card_header %}
+  {% if is_totp %}<h5>Enroll Two-Factor Authentication</h5>{% endif %}
+  {% if is_sms %}<h5>Enroll Text Message Authentication</h5>{% endif %}
+{% endblock %}
+{% block card_body %}
+  {% if is_totp %}
+  <p>Use a one-time password authenticator on your mobile device or computer to enable MFA.</p>
+  <p>We recommend cloud-based mobile authenticator apps such as Authy, Duo Mobile, and LastPass.
+  They can restore access if you lose your hardware device.</p>
+    <div class="d-flex justify-content-center">
+      <img style="max-height:300px" class="img-thumbnail" src="{{ request.session.workos_totp_qr_code }}" alt="qr_code">
+    </div>
+
+  <div class="my-3">
+    <p>If you cannot scan the QR code you can manually enter this secret <code>{{ request.session.workos_totp_secret }}</code></p>
+
+  </div>
+  {% endif %}
+
+
+    <form action="{{ app_path }}" method="post" id="login-form">{% csrf_token %}
+      {% include 'registration/form.html' %}
+      <div class="d-flex justify-content-between my-2">
+
+        <a href="{% url 'mfa_enroll' %}" class="btn btn-lg btn-primary" id="btn-back">
+          {% translate 'Back' %}
+        </a>
+        <input type="submit" value="Next" class="btn btn-primary btn-lg"/>
+      </div>
+    </form>
+
+{% endblock %}
+

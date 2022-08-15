@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% load workos_tags %}
+{% block content %}
+  <div class="my-2"></div>
+  <div class="container">
+
+    <a class="btn btn-primary" href="/admin/">Admin</a>
+    <a class="btn btn-warning" href="{% url 'logout' %}">Logout</a>
+
+  {% if user.is_authenticated %}
+    <h5>Welcome {{ user.username }}</h5>
+  {% endif %}
+  {% if deep %}
+    <p>You made it to a deep link</p>
+  {% endif %}
+
+
+    <h3>Login Rules</h3>
+  <div class="row">
+    <div class="col-1">
+      <h5>Legend</h5>
+    </div>
+    <div class="col">
+      <table class="table">
+        <tbody><tr class="table-success"><td>Used for {{ user.username }}</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="col">
+
+      <table class="table">
+        <tbody><tr class="table-warning"><td>Applies but is not used for {{ user.username }}</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Rule Name</th>
+        <th>Method</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for rule in rules %}
+      <tr class="{%  rule_applies_class rule user %}">
+        <td><a href="{% url 'admin:workos_login_loginrule_change' rule.pk %}">{{ rule }}</a></td>
+        <td>{{ rule.get_method_display }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+
+  <h3>Users</h3>
+    <table class="table table-striped">
+      <thead>
+      <tr>
+        <th>User</th>
+        <th>Staff</th>
+        <th>Login method</th>
+      </tr>
+      </thead>
+      <tbody>
+      {% for user in users %}
+        <tr>
+          <td><a href="{% url 'admin:custom_user_user_change' user.pk %}">{{ user }}</a></td>
+          <td>{{ user.is_staff }}</td>
+          <td>{{ user|login_rule }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

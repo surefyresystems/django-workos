@@ -1,0 +1,57 @@
+{% load i18n static %}<!DOCTYPE html>
+{% get_current_language as LANGUAGE_CODE %}
+<html lang="{{ LANGUAGE_CODE|default:"en-us" }}">
+<head>
+  <title>{% block title %}{% endblock %}</title>
+  {% block extrastyle %}{% endblock %}
+  {% block extrahead %}{% endblock %}
+  {% block responsive %}
+    <meta name="viewport" content="user-scalable=no, width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  {% endblock %}
+  {% block blockbots %}<meta name="robots" content="NONE,NOARCHIVE">{% endblock %}
+  {% include 'registration/bootstrap.html' %}
+  {% include 'registration/style.html' %}
+</head>
+
+<body class="{% block bodyclass %}{% endblock %}">
+{% include 'registration/messages.html' %}
+<!-- Container -->
+<div id="container">
+
+
+  <div class="main" id="main">
+    <div class="content">
+      <!-- Content -->
+      <div class="container">
+        <div class="col-md-6 offset-md-3 justify-content-center d-flex">
+          {% include 'registration/logo.html' %}
+        </div>
+      </div>
+
+        <div class="container">
+          <div class="col-md-6 offset-md-3">
+            <div class="card">
+              <div class="card-header">
+                {% block card_header%}
+                <h2> Login </h2>
+                {% endblock %}
+              </div>
+              <div class="card-body">
+              {% block card_body %}
+              {% endblock %}
+              </div>
+            </div>
+          </div>
+        </div>
+        {% block content %}
+        {% endblock %}
+        <br class="clear">
+      <!-- END Content -->
+      {% block footer %}<div id="footer"></div>{% endblock %}
+    </div>
+  </div>
+</div>
+<!-- END Container -->
+{% block javascript %}{% endblock %}
+</body>
+</html>

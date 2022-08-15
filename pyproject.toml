@@ -1,0 +1,19 @@
+[build-system]
+requires = ['setuptools>=40.8.0', 'wheel']
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "workos_login"
+version = "0.1.0"
+description = "Enabling SSO, MFA and passwordless login for Django projects by using WorkOS."
+readme = "README.md"
+requires-python = ">=3.7"
+keywords = ["django", "sso", "workos", "mfa"]
+license = {text = "BSD 3-Clause License"}
+classifiers = [
+    "Framework :: Django",
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+    "workos==1.14"
+]

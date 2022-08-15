@@ -1,0 +1,23 @@
+{% extends 'registration/base_registration.html' %}
+{% load i18n %}
+{% block card_body %}
+
+  <form action="{{ app_path }}" method="post" id="login-form">{% csrf_token %}
+    {% if sms %}
+      <p>Please enter the code that you receive over text message.</p>
+    {% elif totp %}
+      <p>Please enter the code from your authenticator app.</p>
+    {% endif %}
+
+    {% include 'registration/form.html' %}
+
+    <div class="d-flex justify-content-between my-2">
+
+      <a href="{% url 'login' %}" class="btn btn-lg btn-primary" id="btn-back">
+        {% translate 'Back' %}
+      </a>
+      <input type="submit" value="Next" class="btn btn-lg btn-primary"/>
+    </div>
+  </form>
+
+{% endblock %}
