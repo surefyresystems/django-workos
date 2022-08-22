@@ -9,7 +9,6 @@ from django.conf import settings
 from django.urls import reverse
 from django.views.decorators.http import require_GET
 from django.contrib.auth import login as auth_login, get_user_model
-from django.core import signing
 from django.utils.translation import gettext_lazy as _
 
 import workos
@@ -21,7 +20,8 @@ from workos_login.forms import LoginForm, MFAVerificationForm, MFAEnrollFormSMS,
 from workos_login.models import LoginRule, UserLogin, LoginMethods
 from workos_login.conf import conf
 from workos_login.signals import workos_user_created, workos_send_magic_link
-from workos_login.utils import find_user, user_has_mfa_enabled, get_user_login_model, mfa_enroll, jit_create_user
+from workos_login.utils import find_user, user_has_mfa_enabled, get_user_login_model, mfa_enroll, jit_create_user, \
+    pack_state, unpack_state
 
 SESSION_AUTHENTICATED_USER_ID = "workos_auth_user_id"  # Stores the authenticated user id (used by MFA)
 SESSION_USER_ID = "workos_user_id"  # Store the user ID in SSO state.
@@ -128,7 +128,7 @@ class BaseCallbackView(RedirectView):
         user = None
         username = None
         if (state):
-            state = signing.loads(state)
+            state = unpack_state(state)
 
         profile = workos.client.sso.get_profile_and_token(code).to_dict()["profile"]
 
@@ -225,13 +225,12 @@ class WorkosLoginView(LoginView):
         user = form.get_user()
         rule = form.get_rule()
         method = rule.method
-
-        state = signing.dumps({
+        state = pack_state({
             SESSION_RULE_ID: rule.pk,
             SESSION_USER_ID: user.pk if user else 0,
             STATE_USERNAME: form.cleaned_data["username"],
             SESSION_NEXT: self.get_success_url()
-        }, compress=True)
+        })
 
         self.request.session[SESSION_RULE_ID] = rule.pk
         self.request.session[SESSION_NEXT] = self.get_success_url()
@@ -249,9 +248,10 @@ class WorkosLoginView(LoginView):
             return super(WorkosLoginView, self).form_valid(form)
         elif method == LoginMethods.MAGIC_LINK:
             email = user.email
+            uri = conf.WORKOS_MAGIC_REDIRECT_URI if conf.WORKOS_MAGIC_REDIRECT_URI else self.request.build_absolute_uri(reverse("magic_callback"))
             session = workos.client.passwordless.create_session({
                 'email': email,
-                'redirect_uri': self.request.build_absolute_uri(conf.WORKOS_MAGIC_REDIRECT_URI),
+                'redirect_uri': uri,
                 'state': state,
                 'type': 'MagicLink'})
             workos_send_magic_link.send(sender=LoginRule, user=user, link=session["link"], rule=rule)
@@ -259,16 +259,18 @@ class WorkosLoginView(LoginView):
                 workos.client.passwordless.send_session(session['id'])
             return redirect('magic_link_confirmation')
         elif method == LoginMethods.SAML_SSO:
+            uri = conf.WORKOS_SSO_REDIRECT_URI if conf.WORKOS_SSO_REDIRECT_URI else self.request.build_absolute_uri(reverse("sso_callback"))
             authorization_url = workos.client.sso.get_authorization_url(
                 connection=rule.connection_id if rule.connection_id else None,
                 organization=rule.organization_id if rule.organization_id else None,
-                redirect_uri=self.request.build_absolute_uri(conf.WORKOS_SSO_REDIRECT_URI),
+                redirect_uri=uri,
                 state=state,
             )
             return redirect(authorization_url)
         elif method in {LoginMethods.MICROSOFT_SSO, LoginMethods.GOOGLE_SSO}:
+            uri = conf.WORKOS_SSO_REDIRECT_URI if conf.WORKOS_SSO_REDIRECT_URI else self.request.build_absolute_uri(reverse("sso_callback"))
             authorization_url = workos.client.sso.get_authorization_url(
-                redirect_uri=self.request.build_absolute_uri(conf.WORKOS_SSO_REDIRECT_URI),
+                redirect_uri=uri,
                 provider=LoginMethods(method).provider,
                 state=state,
             )

@@ -140,9 +140,9 @@ class LoginRule(models.Model):
         if self.jit_creation and not self.sso:
             errors["jit_creation"] = _("You can only set account creation if using SSO")
 
-        if (self.jit_attributes or self.jit_groups.exists()) and not self.jit_creation:
-            errors["jit_attributes"] = errors["jit_groups"] = _("This setting does not apply unless just in time "
-                                                                "account creation is set.")
+        if self.jit_attributes and not self.jit_creation:
+            errors["jit_attributes"] = _("This setting does not apply unless just in time "
+                                         "account creation is set.")
 
         if errors:
             raise ValidationError(errors)

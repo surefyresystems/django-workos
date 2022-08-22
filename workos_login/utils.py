@@ -1,6 +1,8 @@
+import json
 from typing import Optional
 
 from django.contrib.auth import get_user_model
+from django.core import signing
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models.functions import Lower
 from workos.exceptions import BadRequestException
@@ -83,8 +85,6 @@ def jit_create_user(profile: dict, rule: models.Model) -> models.Model:
     """
     related_attributes = {k: v for k, v in rule.jit_attributes.items() if isinstance(v, dict)}
     user_attributes = {k: v for k, v in rule.jit_attributes.items() if k not in related_attributes}
-    print(related_attributes)
-    print(user_attributes)
 
     user = get_user_model().objects.create_user(username=profile["email"], email=profile["email"],
                                                 first_name=profile["first_name"], last_name=profile["last_name"],
@@ -104,3 +104,23 @@ def jit_create_user(profile: dict, rule: models.Model) -> models.Model:
         item_to_update.save()
 
     return user
+
+
+def pack_state(state_dict: dict) -> str:
+    """
+    Pack state object into a string that will be used during handshake.
+    State must be unpacked with unpack_state.
+    This will sign the state so secrets cannot be seen and it will merge in
+    any user defined state variables (which will not be signed).
+    """
+    state = signing.dumps(state_dict, compress=True)
+    return json.dumps({"_": state, **conf.WORKOS_EXTRA_STATE})
+
+
+def unpack_state(state_str: str) -> dict:
+    """
+    Unpack state that was packed with pack_state.
+    Drop any extra state and only return what was originally packed.
+    """
+    state = json.loads(state_str)
+    return signing.loads(state["_"])

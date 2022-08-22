@@ -39,4 +39,5 @@ If you are already using a custom site admin, you should have it inherit from `w
 
 5. Update your logo by creating a file called registration/logo.html and add an `img` tag.
 6. Optionally set your bootstrap location by overriding `registration/bootstrap.html` and have a single `link` tag to your bootstrap stylesheet (javascript bootstrap file is not required)
+7. If you use django-stronghold or any other framework to require logins make sure allow all `/accounts` URLs.
 
