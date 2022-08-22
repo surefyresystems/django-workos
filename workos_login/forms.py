@@ -21,11 +21,9 @@ class BootstrapMixin:
             field.widget.attrs["class"] = "form-control"
 
     def _post_clean(self):
-        print(self.errors)
         for name, field in self.fields.items():
             class_list = ["form-control"]
             if(field.get_bound_field(self, name).errors):
-                print("has error")
                 class_list.append("is-invalid")
             field.widget.attrs["class"] = " ".join(class_list)
 
