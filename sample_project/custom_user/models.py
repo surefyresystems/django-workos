@@ -19,6 +19,9 @@ class Profile(models.Model):
 
 @receiver(workos_send_magic_link)
 def my_handler(sender, **kwargs):
+    """
+    Handle a magic email custom send
+    """
     email = kwargs["user"].email
-    link = kwargs["link"]
-    send_mail("New login link", link, "dustingtorres@gmail.com", [email])
+    body = "Your magic link: {}".format(kwargs["link"])
+    send_mail("New login link", body, "dustingtorres@gmail.com", [email])
