@@ -211,6 +211,10 @@ class SSOCallbackView(BaseCallbackView):
 class WorkosLoginView(LoginView):
     form_class = LoginForm
 
+    def __init__(self, *args, **kwargs):
+        self.cookies_disabled = False
+        super().__init__(*args, **kwargs)
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["login_home"] = resolve_url(settings.LOGIN_REDIRECT_URL)
@@ -219,9 +223,16 @@ class WorkosLoginView(LoginView):
     def get(self, request, *args, **kwargs):
         # Starting a new login - clear session
         clear_session_vars(request)
+        request.session.set_test_cookie()
         return super().get(request, *args, **kwargs)
 
     def form_valid(self, form):
+        # First check if cookie are enabled
+        if not self.request.session.test_cookie_worked():
+            messages.error(self.request, _("Cookies are required for proper functionality. Please enable cookies and try again."))
+            self.cookies_disabled = True
+            return self.form_invalid(form)
+
         user = form.get_user()
         rule = form.get_rule()
         method = rule.method
