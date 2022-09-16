@@ -42,11 +42,12 @@ Here are the available settings for login rules when creating in the admin
 
 ## Quick start
 
-1. Add "workos_login" to your INSTALLED_APPS setting like this:
+1. Add "workos_login" to your INSTALLED_APPS setting and make sure it is before `admin`:
 ```
     INSTALLED_APPS = [
-        ...
         'workos_login',
+        'workos_login.admin_site.AdminLoginConfig',
+        ...
     ]
 ```
 
@@ -55,7 +56,7 @@ If you are already using a custom site admin, you should have it inherit from `w
 
 3. Change your login urls from `path('accounts/', include('django.contrib.auth.urls'))`  to `path('accounts/', include('workos_login.urls'))`
 
-4. Run ``python manage.py migrate`` to create the needed models.
+4. Run `python manage.py migrate` to create the needed models.
 
 5. Update your logo by creating a file called registration/logo.html and add an `img` tag.
 6. Optionally set your bootstrap location by overriding `registration/bootstrap.html` and have a single `link` tag to your bootstrap stylesheet (javascript bootstrap file is not required)

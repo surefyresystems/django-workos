@@ -2,6 +2,7 @@ from django.contrib.auth.decorators import login_required
 from django.urls import path
 from django.views.generic import TemplateView
 
+from .forms import WorkosPasswordResetForm, WorkosSetPasswordForm
 from .views import WorkosLoginView, get_login_method, MFAVerificationView, MFAEnrollSMSView, \
     MFAEnrollTOTPView, MagicCallbackView, SSOCallbackView, MFAStartEnrollView
 from django.contrib.auth import views as auth_views
@@ -26,20 +27,22 @@ urlpatterns = [
         auth_views.PasswordChangeDoneView.as_view(),
         name="password_change_done",
     ),
-    # path("password_reset/", auth_views.PasswordResetView.as_view(), name="password_reset"),
-    # path(
-    #     "password_reset/done/",
-    #     auth_views.PasswordResetDoneView.as_view(),
-    #     name="password_reset_done",
-    # ),
-    # path(
-    #     "reset/<uidb64>/<token>/",
-    #     auth_views.PasswordResetConfirmView.as_view(),
-    #     name="password_reset_confirm",
-    # ),
-    # path(
-    #     "reset/done/",
-    #     auth_views.PasswordResetCompleteView.as_view(),
-    #     name="password_reset_complete",
-    # ),
+    path("password_reset/", auth_views.PasswordResetView.as_view(
+        form_class=WorkosPasswordResetForm
+    ), name="password_reset"),
+    path(
+        "password_reset/done/",
+        auth_views.PasswordResetDoneView.as_view(),
+        name="password_reset_done",
+    ),
+    path(
+        "reset/<uidb64>/<token>/",
+        auth_views.PasswordResetConfirmView.as_view(form_class=WorkosSetPasswordForm),
+        name="password_reset_confirm",
+    ),
+    path(
+        "reset/done/",
+        auth_views.PasswordResetCompleteView.as_view(),
+        name="password_reset_complete",
+    ),
 ]

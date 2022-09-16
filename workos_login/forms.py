@@ -1,4 +1,4 @@
-from django.contrib.auth.forms import AuthenticationForm, UsernameField
+from django.contrib.auth.forms import AuthenticationForm, UsernameField, PasswordResetForm, SetPasswordForm
 from django import forms
 from django.core.exceptions import ObjectDoesNotExist
 from django.utils.translation import gettext_lazy as _
@@ -141,3 +141,11 @@ class MFAEnrollFormTOTP(BootstrapMixin, forms.Form):
 
     def complete_enrollment(self, user):
         return self.cleaned_data["factor_id"]
+
+
+class WorkosPasswordResetForm(BootstrapMixin, PasswordResetForm):
+    pass
+
+
+class WorkosSetPasswordForm(BootstrapMixin, SetPasswordForm):
+    pass

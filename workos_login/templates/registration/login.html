@@ -11,7 +11,7 @@
     {% endif %}
     {% include 'registration/form.html' %}
 
-    {#  <div class="mb-3"><a href="{% url 'password_reset' %}">Forgot your password?</a></div> #}
+    <div id="forgot-password" class="my-2 d-none"><a href="{% url 'password_reset' %}">Forgot your password?</a></div>
 
   </form>
   <div class="d-flex justify-content-between my-2">
@@ -101,6 +101,7 @@
       const method = response.method;
       if(method === 'username' || method === 'mfa'){
         showInput('id_password');
+        showItem('forgot-password');
       }
       disableItem("id_username");
       incrementStep();
@@ -134,6 +135,7 @@
           decrementStep();
           hideInput('id_password');
           setValue('id_password', '');
+          hideItem('forgot-password');
           enableItem('id_username');
           focusItem('id_username');
           break

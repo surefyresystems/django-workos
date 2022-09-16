@@ -34,13 +34,13 @@ ALLOWED_HOSTS = []
 
 INSTALLED_APPS = [
     # 'django.contrib.admin',
+    'workos_login',
     'workos_login.admin_site.AdminLoginConfig',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'workos_login',
     'custom_user',
 ]
 AUTH_USER_MODEL = 'custom_user.User'
