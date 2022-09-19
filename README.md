@@ -76,3 +76,19 @@ You can customize this package with some settings that can be added to your `set
 | `WORKOS_SMS_MFA_TEMPLATE`  | `Your authentication code is {{code}}` | The MFA template that should be used for sending an SMS message. It must contain `{{code}}` where you want the 6 digit code to go                                                                                                                                        |
 | `WORKOS_SEND_CUSTOM_EMAIL` | `False`                                | Controls whether or not you would like your application to send magic emails or WorkOS platform to send. If set to `False` you need to listen to `workos_send_magic_link` signal. Example can be seen in the [sample project](sample_project/custom_user/models.py#L21). |
 
+### Updating Templates
+
+If you want to update the login page you can override `registration/login.html` to extend `registration/base_login.html` and override some blocks.
+
+Example for adding some messages before/after the form:
+
+```html
+{% extends 'registration/base_login.html' %}
+{% block before_form %}
+Welcome back! Please add your username below.
+{% endblock %}
+
+{% block after_form %}
+Don't have a login? <a href="{% url 'your_signup_view_name'%}">Signup Here</a>
+{% endblock %}
+```
