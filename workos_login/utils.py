@@ -85,8 +85,8 @@ def jit_create_user(profile: dict, rule: models.Model) -> models.Model:
     """
     related_attributes = {k: v for k, v in rule.jit_attributes.items() if isinstance(v, dict)}
     user_attributes = {k: v for k, v in rule.jit_attributes.items() if k not in related_attributes}
-
-    user = get_user_model().objects.create_user(username=profile["email"], email=profile["email"],
+    username = rule.format_username(email=profile["email"], idp_id=profile["idp_id"], workos_id=profile["id"])
+    user = get_user_model().objects.create_user(username=username, email=profile["email"],
                                                 first_name=profile["first_name"], last_name=profile["last_name"],
                                                 is_active=False, **user_attributes)
     user.set_unusable_password()
@@ -104,6 +104,34 @@ def jit_create_user(profile: dict, rule: models.Model) -> models.Model:
         item_to_update.save()
 
     return user
+
+
+def update_user_profile(user: models.Model, profile: dict, rule: models.Model) -> bool:
+    """
+    Called on SSO login to update user attributes if anything changed on the SSO side
+    :param user: user that is logging in
+    :param profile: profile returned from workos that contains first, last, email
+    :param rule: the rule used for the login. This should be a form of SSO since only SSO logins have attributes that
+                 can update user attributes.
+    :return: True if user updated, false if user did not need update
+    """
+    needs_update = False
+    if user.first_name != profile["first_name"]:
+        user.first_name = profile["first_name"]
+        needs_update = True
+
+    if user.last_name != profile["last_name"]:
+        user.last_name = profile["last_name"]
+        needs_update = True
+
+    if user.email != profile["email"]:
+        user.email = profile["email"]
+        needs_update = True
+
+    if needs_update:
+        user.save()
+
+    return needs_update
 
 
 def pack_state(state_dict: dict) -> str:

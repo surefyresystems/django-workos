@@ -108,7 +108,6 @@
         showInput('id_password');
         showItem('forgot-password');
       }
-      disableItem("id_username");
       incrementStep();
       if(method === 'sso' || method === 'magic'){
         // No more work to do - go next again
@@ -153,6 +152,7 @@
       if(username.checkValidity()){
         oReq.addEventListener("load", reqListener);
         oReq.open("GET", "{% url 'login_method' %}"+"?username="+encodeURIComponent(username.value));
+        disableItem("id_username");
         oReq.send();
       } else {
         username.reportValidity();

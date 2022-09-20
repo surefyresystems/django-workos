@@ -1,0 +1,3 @@
+
+class UnknownUsernameFormat(Exception):
+    pass

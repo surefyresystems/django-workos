@@ -12,6 +12,7 @@ from workos_login.conf import conf
 import re
 
 # Create your models here.
+from workos_login.exceptions import UnknownUsernameFormat
 from workos_login.utils import find_user
 
 
@@ -59,6 +60,12 @@ class LoginMethods(models.TextChoices):
         return None
 
 
+class UsernameChoices(models.TextChoices):
+    EMAIL = "email", "Email Address"
+    IDP_ID = "idp", "Identity Provider ID"
+    WORKOS_ID = "workos", "Unique ID"
+
+
 class LoginRule(models.Model):
     name = models.CharField(max_length=255, help_text=_("Name for this config"), unique=True)
     lookup_attributes = models.JSONField(blank=True, null=True)
@@ -82,6 +89,8 @@ class LoginRule(models.Model):
     jit_attributes = models.JSONField(blank=True, default=dict,
                                       help_text=_("Attributes to set on user instance when creating user"))
 
+    jit_username_format = models.CharField(max_length=10, blank=True, help_text=_("Username format for created accounts"),
+                                           choices=UsernameChoices.choices)
     objects = WorkosQuerySet.as_manager()
 
     class Meta:
@@ -140,6 +149,9 @@ class LoginRule(models.Model):
         if self.jit_creation and not self.sso:
             errors["jit_creation"] = _("You can only set account creation if using SSO")
 
+        if self.jit_creation and not self.jit_username_format:
+            errors["jit_username_format"] = _("You must select the username format")
+
         if self.jit_attributes and not self.jit_creation:
             errors["jit_attributes"] = _("This setting does not apply unless just in time "
                                          "account creation is set.")
@@ -182,6 +194,14 @@ class LoginRule(models.Model):
 
         return exists
 
+    def format_username(self, email, idp_id, workos_id):
+        if self.jit_username_format == UsernameChoices.EMAIL:
+            return email
+        if self.jit_username_format == UsernameChoices.IDP_ID:
+            return idp_id
+        if self.jit_username_format == UsernameChoices.WORKOS_ID:
+            return workos_id
+        raise UnknownUsernameFormat
 
 class UserLogin(models.Model):
     """One-to-one link to a user that sets the ids needed for sso and mfa"""

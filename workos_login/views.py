@@ -21,7 +21,7 @@ from workos_login.models import LoginRule, UserLogin, LoginMethods
 from workos_login.conf import conf
 from workos_login.signals import workos_user_created, workos_send_magic_link
 from workos_login.utils import find_user, user_has_mfa_enabled, get_user_login_model, mfa_enroll, jit_create_user, \
-    pack_state, unpack_state
+    pack_state, unpack_state, update_user_profile
 
 SESSION_AUTHENTICATED_USER_ID = "workos_auth_user_id"  # Stores the authenticated user id (used by MFA)
 SESSION_USER_ID = "workos_user_id"  # Store the user ID in SSO state.
@@ -170,6 +170,8 @@ class BaseCallbackView(RedirectView):
                 return self.create_error(_("Account email does not match your request. Please try again"))
             user = jit_create_user(profile, rule)
             workos_user_created.send(sender=UserLogin, user=user, profile=profile, rule=rule)
+        else:
+            update_user_profile(user, profile, rule)
 
         # We have a user, make sure they are active
         if not user.is_active:
