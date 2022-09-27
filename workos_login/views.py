@@ -166,8 +166,9 @@ class BaseCallbackView(RedirectView):
             if rule.jit_creation is False:
                 return self.create_error(_("Your user account has not been provisioned. Please contact your administrator to create an account."))
 
-            if username != profile["email"]:
-                return self.create_error(_("Account email does not match your request. Please try again"))
+            expected_username = rule.format_username(email=profile["email"], idp_id=profile["idp_id"], workos_id=profile["id"])
+            if username and username != expected_username:
+                return self.create_error(_("Account username does not match your request. Please try again"))
             user = jit_create_user(profile, rule)
             workos_user_created.send(sender=UserLogin, user=user, profile=profile, rule=rule)
         else:
