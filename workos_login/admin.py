@@ -42,5 +42,9 @@ class LoginRuleAdmin(admin.ModelAdmin):
         return _("Only available for SSO with organization ID set.")
 
 
+class UserLoginAdmin(admin.ModelAdmin):
+    readonly_fields = fields = ("mfa_factor", "mfa_type", "sso_id", "idp_id", "user", "created_at", "last_modified")
+
+
 admin.site.register(LoginRule, LoginRuleAdmin)
-admin.site.register(UserLogin)
+admin.site.register(UserLogin, UserLoginAdmin)
