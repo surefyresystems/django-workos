@@ -3,8 +3,7 @@ from typing import Optional
 
 from django.contrib.auth import get_user_model
 from django.core import signing
-from django.core.exceptions import ObjectDoesNotExist
-from django.db.models.functions import Lower
+from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
 from workos.exceptions import BadRequestException
 
 from workos_login.conf import conf
@@ -12,18 +11,36 @@ from django.db import models
 import workos
 
 
+def find_user_by_email(email: str) -> Optional[models.Model]:
+    """
+    Given an email address find a user account that matches (case insensitive).
+    If there are duplicates, none are returned.
+
+    :param email: Email address
+    :return: A user object or None (if duplicates or none found)
+    """
+    try:
+        return get_user_model().objects.get(email__iexact=email)
+    except (ObjectDoesNotExist, MultipleObjectsReturned):
+        return None
+
+
 def find_user(username_or_email: str) -> Optional[models.Model]:
+    """
+    Find a user given the username/email they entered in the form.
+    If username is an exact match return that.
+    If username is not found, and email lookup is enabled - look for the email (case insensitive).
+    :param username_or_email: The username entered in the login form
+    :return: User if found else None
+    """
     user = None
-    if(conf.WORKOS_EMAIL_LOOKUP):
-        try:
-            user = get_user_model().objects.annotate(email_lower=Lower('email')).get(email_lower=username_or_email.lower())
-        except ObjectDoesNotExist:
-            pass
-    if(not user and conf.WORKOS_USERNAME_LOOKUP):
+    if conf.WORKOS_USERNAME_LOOKUP:
         try:
             user = get_user_model().objects.get(username=username_or_email)
         except ObjectDoesNotExist:
             pass
+    if not user and conf.WORKOS_EMAIL_LOOKUP:
+        user = find_user_by_email(username_or_email)
     return user
 
 

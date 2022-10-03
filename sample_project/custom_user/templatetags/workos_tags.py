@@ -7,7 +7,7 @@ register = template.Library()
 
 @register.simple_tag
 def rule_applies_class(rule, user):
-    if rule == LoginRule.objects.find_rule_for_username(user.username):
+    if rule == LoginRule.objects.find_rule_for_user(user):
         return "table-success"
     elif rule.rule_applies_to_user(user):
         return "table-warning"
@@ -16,4 +16,4 @@ def rule_applies_class(rule, user):
 
 @register.filter
 def login_rule(user):
-    return LoginRule.objects.find_rule_for_username(user.username)
+    return LoginRule.objects.find_rule_for_user(user)

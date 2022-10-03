@@ -23,10 +23,32 @@ class EmailRegexField(models.TextField):
 
 
 class WorkosQuerySet(models.QuerySet):
-    def find_rule_for_username(self, email) -> Optional["LoginRule"]:
+    def find_rule_for_username(self, username_or_email: str) -> Optional["LoginRule"]:
         """Find a rule for a matching username"""
         for rule in self.all():
-            if rule.rule_applies_to_username(email):
+            if rule.rule_applies_to_username(username_or_email):
+                return rule
+        return None
+
+    def find_rule_for_user(self, user: models.Model) -> Optional["LoginRule"]:
+        """
+        Find the applied rule for this user
+        :param user: The user to test
+        :return: The rule that applies - it will only return 1 rule at most.
+        """
+        for rule in self.all():
+            if rule.rule_applies_to_user(user):
+                return rule
+        return None
+
+    def find_rule_for_email(self, email: str) -> Optional["LoginRule"]:
+        """Find a rule for a matching an email address
+        This could return a rule that matches an email address even if JIT is not enabled and the user does not exist.
+        This is used for IdP initiated logins to try and find a matching rule before associated to user or
+        creating user (if JIT is enabled).
+        """
+        for rule in self.all():
+            if rule.test_email(email):
                 return rule
         return None
 
@@ -159,7 +181,7 @@ class LoginRule(models.Model):
         if errors:
             raise ValidationError(errors)
 
-    def _test_email(self, email: str) -> bool:
+    def test_email(self, email: str) -> bool:
         if self.email_regex and re.search(self.email_regex, email, flags=re.IGNORECASE):
             return True
         return False
@@ -178,7 +200,7 @@ class LoginRule(models.Model):
         if self.jit_creation is False:
             return False
 
-        if self._test_email(username_or_email):
+        if self.test_email(username_or_email):
             return True
 
         return False
@@ -190,7 +212,7 @@ class LoginRule(models.Model):
 
         if not exists:
             # The user attributes do not match, check if email domain matches
-            return self._test_email(user.email)
+            return self.test_email(user.email)
 
         return exists
 

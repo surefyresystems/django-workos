@@ -20,8 +20,8 @@ from workos_login.forms import LoginForm, MFAVerificationForm, MFAEnrollFormSMS,
 from workos_login.models import LoginRule, UserLogin, LoginMethods
 from workos_login.conf import conf
 from workos_login.signals import workos_user_created, workos_send_magic_link
-from workos_login.utils import find_user, user_has_mfa_enabled, get_user_login_model, mfa_enroll, jit_create_user, \
-    pack_state, unpack_state, update_user_profile
+from workos_login.utils import user_has_mfa_enabled, get_user_login_model, mfa_enroll, jit_create_user, \
+    pack_state, unpack_state, update_user_profile, find_user_by_email
 
 SESSION_AUTHENTICATED_USER_ID = "workos_auth_user_id"  # Stores the authenticated user id (used by MFA)
 SESSION_USER_ID = "workos_user_id"  # Store the user ID in SSO state.
@@ -152,9 +152,16 @@ class BaseCallbackView(RedirectView):
                 user = get_user_model().objects.get(pk=user_id)
             rule = LoginRule.objects.get(pk=rule_id)
         elif self.allow_idp_initiated:
-            # IDP Initiated
-            user = find_user(profile["email"])
-            rule = LoginRule.objects.find_rule_for_username(profile["email"])
+            # First time IDP Initiated
+            # If they have logged in before we would have a user_login created already
+            # Since this is a first time login we have not created a formatted username yet.
+            # Instead, do a lookup based on email to try to find a matching account already in the system.
+            user = find_user_by_email(profile["email"])
+            if user:
+                rule = LoginRule.objects.find_rule_for_user(user)
+            else:
+                # No user found, but maybe a JIT rule exists for this email address
+                rule = LoginRule.objects.find_rule_for_email(profile["email"])
             if rule is None:
                 return self.create_error(_("No login was found, please contact your administrator"))
             if rule.organization_id != profile["organization_id"] and rule.connection_id != profile["connection_id"]:
@@ -434,3 +441,5 @@ class MFAEnrollTOTPView(LoginSuccessUrlMixin, FormView):
         ctx = super().get_context_data(**kwargs)
         ctx["is_totp"] = True
         return ctx
+
+# Allow for an API post (open to all) to post a username/email to get the flow started.

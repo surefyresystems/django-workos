@@ -37,6 +37,7 @@ Here are the available settings for login rules when creating in the admin
 | Just in time creation    | Should users be able to login if they don't already have an account. If enable the account will be created automatically                                                                           |
 | JIT Groups               | What groups should be assigned to a user account that is created with this rule                                                                                                                    |
 | JIT Attributes           | What attributes should be assigned to users created with this rule. Example `{"is_superuser": true}`                                                                                               |
+| JIT Username Format      | If creating a user - what should the username be?                                                                                                                                                  |
 | TOTP Organization Name   | The organization name used for authenticator apps. Only used for MFA. This name will appear in the authenticator app.                                                                              |
 
 
@@ -75,6 +76,7 @@ You can customize this package with some settings that can be added to your `set
 | `WORKOS_USERNAME_LOOKUP`   | `True`                                 | Whether or not to allow for login by username. Either this or `WORKOS_EMAIL_LOOKUP` must be set (or both can be set and it will check email first)                                                                                                                       |
 | `WORKOS_SMS_MFA_TEMPLATE`  | `Your authentication code is {{code}}` | The MFA template that should be used for sending an SMS message. It must contain `{{code}}` where you want the 6 digit code to go                                                                                                                                        |
 | `WORKOS_SEND_CUSTOM_EMAIL` | `False`                                | Controls whether or not you would like your application to send magic emails or WorkOS platform to send. If set to `False` you need to listen to `workos_send_magic_link` signal. Example can be seen in the [sample project](sample_project/custom_user/models.py#L21). |
+| `LOGIN_REDIRECT_URL`       | `/accounts/profile/`                   | This [standard Django setting](https://docs.djangoproject.com/en/dev/ref/settings/#login-redirect-url) is respected to control where the user will end up after login                                                                                                    |
 
 ### Updating Templates
 
@@ -92,3 +94,64 @@ Welcome back! Please add your username below.
 Don't have a login? <a href="{% url 'your_signup_view_name'%}">Signup Here</a>
 {% endblock %}
 ```
+
+## Logging In
+django-workos supports both direct login (SP login) and if using SSO - IdP login.
+
+### Using the login page
+When logging in directly to your Django app you will be presented with a login screen that looks like this:
+
+For all forms of login, if a `next` query parameter is provided the user will be redirected to that URL after authenticating.
+If `next` is not provided `LOGIN_REDIRECT_URL` setting will be used to determine where to redirect the user.
+
+Once a username is entered django-workos will determine which rule applies for this username.
+The next step depends on the rule that applies:
+#### Username / Password
+If the login rule dictates username and password a password input will be presented.
+There will also be a forgot your password link presented to allow users to reset password via email.
+
+#### Magic Email
+The user will be redirected to `magic_link_complete.html` template and an email will be sent.
+Upon the user clicking the link in the email they will be authenticated.
+
+#### MFA
+If MFA applies to user will be prompted for a password and must complete that flow first.
+After the user has provided a correct password they will be prompted to enter the second factor authentication code.
+
+#### SSO / OAuth
+If using SSO (or MS or Google OAuth) the user will be automatically redirected to the correct login page to follow the
+standard SP login flow. 
+
+
+### SSO IdP Login
+If using SSO the user may also login using IdP login.
+Make sure you have configured and [read about IdP login from WorkOS](https://workos.com/docs/sso/login-flows/idp-initiated-sso).
+
+#### User lookup
+If a user has ever successfully logged in using SSO (whether IdP or SP login), django-workos will save the ID that was used to be able to assist in future lookups.
+However, the very first time django-workos will need to either find or create the user inside Django.
+For IdP logins this is done by checking email address which is the most widely available way to try and find a user account.
+If there is a single user with a case-insensitive email address match it will associate the login with the matched user.
+
+## JIT User Creation
+Just In Time (JIT) user creation happens when an SSO login rule matches a username/email but the user has not yet been created.
+This can happen either with SP or IdP login methods.
+django-workos will create the user and always set the first name, last name, email and username fields.
+The username will be formatted based on the JIT Username Format field.
+
+Additionally, you can set groups or other attributes to be set on the user account using JIT Groups or JIT Attributes fields in the login rule.
+JIT Attributes will follow nested related structures.
+For instance, it is a common Django pattern to have a user profile 1-to-1 relationship with a user account.
+You can see an example of this in the [Sample Project Profile Class](/sample_project/custom_user/models.py).
+
+In the sample project you could have JIT attributes that look like:
+```json
+{
+  "is_staff": true, 
+  "profile": {
+    "organization_name": "Acme Inc."
+  }
+}
+```
+This would set the user as both a staff user and update the profile organization name.
+
