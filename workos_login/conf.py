@@ -86,5 +86,9 @@ class Settings:
         # Available methods are 'email', 'idp_id', 'id'
         return getattr(settings, 'WORKOS_JIT_USERNAME', 'email')
 
+    @property
+    def WORKOS_ACTIVE_USER_FILTER(self) -> dict:
+        return getattr(settings, 'WORKOS_ACTIVE_USER_FILTER', {"is_active": True})
+
 
 conf = Settings()

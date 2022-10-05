@@ -9,7 +9,7 @@ from django.shortcuts import redirect, resolve_url
 from django.conf import settings
 from django.urls import reverse
 from django.views.decorators.http import require_GET
-from django.contrib.auth import login as auth_login, get_user_model
+from django.contrib.auth import login as auth_login
 from django.utils.translation import gettext_lazy as _
 
 import workos
@@ -22,7 +22,7 @@ from workos_login.models import LoginRule, UserLogin, LoginMethods
 from workos_login.conf import conf
 from workos_login.signals import workos_user_created, workos_send_magic_link
 from workos_login.utils import user_has_mfa_enabled, get_user_login_model, mfa_enroll, jit_create_user, \
-    pack_state, unpack_state, update_user_profile, find_user_by_email
+    pack_state, unpack_state, update_user_profile, find_user_by_email, get_users
 
 SESSION_AUTHENTICATED_USER_ID = "workos_auth_user_id"  # Stores the authenticated user id (used by MFA)
 SESSION_USER_ID = "workos_user_id"  # Store the user ID in SSO state.
@@ -66,7 +66,7 @@ class UserNotFound(Exception):
 def get_session_user(request: HttpRequest):
     user_id = request.session[SESSION_AUTHENTICATED_USER_ID]
     if(user_id):
-        return get_user_model().objects.get(pk=user_id)
+        return get_users().get(pk=user_id)
     return None
 
 
@@ -148,7 +148,7 @@ class BaseCallbackView(RedirectView):
             user_id = state[SESSION_USER_ID]
             next_url = state[SESSION_NEXT]
             if(user_id):
-                user = get_user_model().objects.get(pk=user_id)
+                user = get_users().get(pk=user_id)
             rule = LoginRule.objects.get(pk=rule_id)
         elif self.allow_idp_initiated:
             # First time IDP Initiated

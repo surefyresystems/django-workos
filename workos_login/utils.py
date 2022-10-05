@@ -12,6 +12,10 @@ from django.db import models
 import workos
 
 
+def get_users():
+    return get_user_model().objects.filter(**conf.WORKOS_ACTIVE_USER_FILTER)
+
+
 def find_user_by_email(email: str) -> Optional[models.Model]:
     """
     Given an email address find a user account that matches (case insensitive).
@@ -21,7 +25,7 @@ def find_user_by_email(email: str) -> Optional[models.Model]:
     :return: A user object or None (if duplicates or none found)
     """
     try:
-        return get_user_model().objects.get(email__iexact=email)
+        return get_users().get(email__iexact=email)
     except (ObjectDoesNotExist, MultipleObjectsReturned):
         return None
 
@@ -37,7 +41,7 @@ def find_user(username_or_email: str) -> Optional[models.Model]:
     user = None
     if conf.WORKOS_USERNAME_LOOKUP:
         try:
-            user = get_user_model().objects.get(username=username_or_email)
+            user = get_users().get(username=username_or_email)
         except ObjectDoesNotExist:
             pass
     if not user and conf.WORKOS_EMAIL_LOOKUP:

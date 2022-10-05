@@ -2,7 +2,6 @@ from enum import Enum
 from typing import Optional
 
 from django.conf import settings
-from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import models
 from django import forms
@@ -14,7 +13,7 @@ import re
 
 # Create your models here.
 from workos_login.exceptions import UnknownUsernameFormat
-from workos_login.utils import find_user, render_attribute
+from workos_login.utils import find_user, render_attribute, get_users
 
 
 class EmailRegexField(models.TextField):
@@ -198,7 +197,7 @@ class LoginRule(models.Model):
     def rule_applies_to_user(self, user: models.Model):
         exists = False
         if self.lookup_attributes:
-            exists = get_user_model().objects.filter(**self.lookup_attributes).filter(pk=user.pk).exists()
+            exists = get_users().filter(**self.lookup_attributes).filter(pk=user.pk).exists()
 
         if not exists:
             # The user attributes do not match, check if email domain matches
