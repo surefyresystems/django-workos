@@ -3,6 +3,7 @@ from typing import Optional
 from django.contrib import messages
 from django.contrib.auth.mixins import UserPassesTestMixin
 from django.contrib.auth.views import LoginView
+from django.db import IntegrityError
 from django.http import JsonResponse, Http404, HttpRequest
 from django.shortcuts import redirect, resolve_url
 from django.conf import settings
@@ -126,7 +127,6 @@ class BaseCallbackView(RedirectView):
         code = self.request.GET.get("code")
         state = self.request.GET.get("state")
         user = None
-        username = None
         if (state):
             state = unpack_state(state)
 
@@ -140,14 +140,13 @@ class BaseCallbackView(RedirectView):
         if user_login:
             # User has logged in before, and we know the user account
             user = user_login.user
-            rule = None
+            rule = user_login.rule
             if(state):
                 next_url = state[SESSION_NEXT]
         elif (state):
             rule_id = state[SESSION_RULE_ID]
             user_id = state[SESSION_USER_ID]
             next_url = state[SESSION_NEXT]
-            username = state[STATE_USERNAME]
             if(user_id):
                 user = get_user_model().objects.get(pk=user_id)
             rule = LoginRule.objects.get(pk=rule_id)
@@ -173,20 +172,33 @@ class BaseCallbackView(RedirectView):
             if rule.jit_creation is False:
                 return self.create_error(_("Your user account has not been provisioned. Please contact your administrator to create an account."))
 
-            expected_username = rule.format_username(email=profile["email"], idp_id=profile["idp_id"], workos_id=profile["id"])
-            if username and username != expected_username:
+            # Since there is no user this must have been an email match, make sure
+            # the email they used is for the correct rule (ensuring they didn't select a wrong account)
+            expected_rule = LoginRule.objects.find_rule_for_email(profile["email"])
+
+            if rule != expected_rule:
                 return self.create_error(_("Account username does not match your request. Please try again"))
-            user = jit_create_user(profile, rule)
+
+            try:
+                user = jit_create_user(rule, profile)
+            except IntegrityError:
+                return self.create_error(_("Unable to create user account, you may already have an account created."))
             workos_user_created.send(sender=UserLogin, user=user, profile=profile, rule=rule)
         else:
-            update_user_profile(user, profile, rule)
+            try:
+                update_user_profile(user, rule, profile)
+            except IntegrityError:
+                self.create_error(_("Unable to update user profile, please contact your administrator."))
 
         # We have a user, make sure they are active
         if not user.is_active:
             return self.create_error(_("Your user account is not active. Please contact your administrator."))
 
         if not user_login:
+            # First time through get the user login and set the rule that is being used.
             user_login = get_user_login_model(user)
+            user_login.rule = rule
+            user_login.save()
 
         self.update_user_login(user_login, profile)
         # Login user and save sso attributes

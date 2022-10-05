@@ -77,5 +77,14 @@ class Settings:
     def WORKOS_EXTRA_STATE(self) -> dict:
         return getattr(settings, 'WORKOS_EXTRA_STATE', {})
 
+    @property
+    def WORKOS_AUTO_UPDATE(self) -> bool:
+        return getattr(settings, 'WORKOS_AUTO_UPDATE', True)
+
+    @property
+    def WORKOS_JIT_USERNAME(self) -> bool:
+        # Available methods are 'email', 'idp_id', 'id'
+        return getattr(settings, 'WORKOS_JIT_USERNAME', 'email')
+
 
 conf = Settings()

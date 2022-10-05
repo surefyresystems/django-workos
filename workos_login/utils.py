@@ -1,9 +1,10 @@
 import json
-from typing import Optional
+from typing import Optional, Any
 
 from django.contrib.auth import get_user_model
 from django.core import signing
-from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
+from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned, FieldDoesNotExist
+from django.template import Template, Context
 from workos.exceptions import BadRequestException
 
 from workos_login.conf import conf
@@ -96,59 +97,91 @@ def mfa_enroll(user: models.Model, factor_id: str, mfa_type: str) -> None:
     user_login.save()
 
 
-def jit_create_user(profile: dict, rule: models.Model) -> models.Model:
+def render_attribute(value: Any, profile: dict) -> Any:
+    """
+    Helper to render an attribute that will convert strings to templates that are provided with `profile`
+    :param value: the attribute value to render
+    :param profile: the profile dict passed from WorkOS
+    :return: Rendered value to save
+    """
+    if isinstance(value, str):
+        t = Template(value)
+        c = Context({"profile": profile})
+        return t.render(c)
+    return value
+
+
+def _update_attributes(obj: models.Model, attributes: Optional[dict], profile: dict, template_only: bool=False) -> None:
+    """
+    Update an object passed in with any attributes defined. The attributes can be a template to access profile data.
+    :param obj: The object to update
+    :param attributes: A dictionary of attributes to update. Ex. {"username": "{{profile.first_name}}{{profile.last_name}}"}
+    :param profile: The WorkOS provided profile https://workos.com/docs/reference/sso/profile
+    :param template_only: If True, only update fields that rely on template and do not update static attributes.
+    :return None:
+    """
+    if not attributes:
+        return
+
+    for field_name, value in attributes.items():
+        try:
+            field = obj._meta.get_field(field_name)
+        except FieldDoesNotExist:
+            # Even though this isn't a proper field it might be some custom attribute or settable property.
+            # Still set the attribute if it exists on the object.
+            if hasattr(obj, field_name) and (template_only is False or value != render_attribute(value, profile)):
+                setattr(obj, field_name, render_attribute(value, profile))
+            continue
+
+        if field.is_relation is False:
+            # If template only, do not update if the value equals the rendered value which implies it is not a template field.
+            if template_only is False or value != render_attribute(value, profile):
+                setattr(obj, field_name, render_attribute(value, profile))
+
+        elif field.many_to_one or field.one_to_one:
+            if value is None:
+                if template_only is False:
+                    setattr(obj, field_name, None)
+            else:
+                _update_attributes(getattr(obj, field_name), value, profile)
+
+    obj.save()
+
+
+def jit_create_user(rule: models.Model, profile: dict) -> models.Model:
     """
     Given a profile from workos and a rule create a user
     """
-    related_attributes = {k: v for k, v in rule.jit_attributes.items() if isinstance(v, dict)}
-    user_attributes = {k: v for k, v in rule.jit_attributes.items() if k not in related_attributes}
-    username = rule.format_username(email=profile["email"], idp_id=profile["idp_id"], workos_id=profile["id"])
+    username = rule.format_username(profile)
     user = get_user_model().objects.create_user(username=username, email=profile["email"],
                                                 first_name=profile["first_name"], last_name=profile["last_name"],
-                                                is_active=False, **user_attributes)
+                                                is_active=False)
     user.set_unusable_password()
-    # Only mark them active once we know the user has been created successfully.
-    user.is_active = True
+    _update_attributes(user, rule.saved_attributes, profile)
+    # Only mark them active once we know the user has been created successfully unless explicitly set in rule.
+    if "is_active" not in rule.saved_attributes:
+        user.is_active = True
     user.save()
 
     for group in rule.jit_groups.all():
         user.groups.add(group)
 
-    for attr, values in related_attributes.items():
-        item_to_update = getattr(user, attr)
-        for k, v in values.items():
-            setattr(item_to_update, k, v)
-        item_to_update.save()
-
     return user
 
 
-def update_user_profile(user: models.Model, profile: dict, rule: models.Model) -> bool:
+def update_user_profile(user: models.Model, rule: Optional[models.Model], profile: dict) -> None:
     """
     Called on SSO login to update user attributes if anything changed on the SSO side
     :param user: user that is logging in
     :param profile: profile returned from workos that contains first, last, email
     :param rule: the rule used for the login. This should be a form of SSO since only SSO logins have attributes that
                  can update user attributes.
-    :return: True if user updated, false if user did not need update
     """
-    needs_update = False
-    if user.first_name != profile["first_name"]:
+    if conf.WORKOS_AUTO_UPDATE is True and rule:
         user.first_name = profile["first_name"]
-        needs_update = True
-
-    if user.last_name != profile["last_name"]:
         user.last_name = profile["last_name"]
-        needs_update = True
-
-    if user.email != profile["email"]:
         user.email = profile["email"]
-        needs_update = True
-
-    if needs_update:
-        user.save()
-
-    return needs_update
+        _update_attributes(user, rule.saved_attributes, profile, template_only=True)
 
 
 def pack_state(state_dict: dict) -> str:

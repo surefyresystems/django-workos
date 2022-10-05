@@ -36,8 +36,7 @@ Here are the available settings for login rules when creating in the admin
 | Organization ID          | The WorkOS organization id for SAML SSO (only used for SAML SSO). Only need either connection or org ID                                                                                            |                                                                                                                                  
 | Just in time creation    | Should users be able to login if they don't already have an account. If enable the account will be created automatically                                                                           |
 | JIT Groups               | What groups should be assigned to a user account that is created with this rule                                                                                                                    |
-| JIT Attributes           | What attributes should be assigned to users created with this rule. Example `{"is_superuser": true}`                                                                                               |
-| JIT Username Format      | If creating a user - what should the username be?                                                                                                                                                  |
+| Saved Attributes         | What attributes should be assigned to users created with this rule. This is only used for SSO method. Example `{"is_superuser": true}`                                                             |
 | TOTP Organization Name   | The organization name used for authenticator apps. Only used for MFA. This name will appear in the authenticator app.                                                                              |
 
 
@@ -76,6 +75,8 @@ You can customize this package with some settings that can be added to your `set
 | `WORKOS_USERNAME_LOOKUP`   | `True`                                 | Whether or not to allow for login by username. Either this or `WORKOS_EMAIL_LOOKUP` must be set (or both can be set and it will check email first)                                                                                                                       |
 | `WORKOS_SMS_MFA_TEMPLATE`  | `Your authentication code is {{code}}` | The MFA template that should be used for sending an SMS message. It must contain `{{code}}` where you want the 6 digit code to go                                                                                                                                        |
 | `WORKOS_SEND_CUSTOM_EMAIL` | `False`                                | Controls whether or not you would like your application to send magic emails or WorkOS platform to send. If set to `False` you need to listen to `workos_send_magic_link` signal. Example can be seen in the [sample project](sample_project/custom_user/models.py#L21). |
+| `WORKOS_AUTO_UPDATE`       | `True`                                 | If using SSO should attributes (such as first name, email, custom attributes) be updated on every login? If this is `False` you will need to make sure to change attributes like email in both IdP and Django separately.                                                |
+| `WORKOS_JIT_USERNAME`      | `email`                                | What should the username be set to? Options are `email`, `idp_id` or `id` (which is the WorkOS unique ID). For more control see Template Attributes section.                                                                                                             |
 | `LOGIN_REDIRECT_URL`       | `/accounts/profile/`                   | This [standard Django setting](https://docs.djangoproject.com/en/dev/ref/settings/#login-redirect-url) is respected to control where the user will end up after login                                                                                                    |
 
 ### Updating Templates
@@ -137,14 +138,15 @@ If there is a single user with a case-insensitive email address match it will as
 Just In Time (JIT) user creation happens when an SSO login rule matches a username/email but the user has not yet been created.
 This can happen either with SP or IdP login methods.
 django-workos will create the user and always set the first name, last name, email and username fields.
-The username will be formatted based on the JIT Username Format field.
+The username will be formatted based on the setting `WORKOS_JIT_USERNAME`.
+You can have more control over the username by using template attributes outlined below.
 
 Additionally, you can set groups or other attributes to be set on the user account using JIT Groups or JIT Attributes fields in the login rule.
 JIT Attributes will follow nested related structures.
 For instance, it is a common Django pattern to have a user profile 1-to-1 relationship with a user account.
 You can see an example of this in the [Sample Project Profile Class](/sample_project/custom_user/models.py).
 
-In the sample project you could have JIT attributes that look like:
+In the sample project you could have saved attributes that look like:
 ```json
 {
   "is_staff": true, 
@@ -155,3 +157,83 @@ In the sample project you could have JIT attributes that look like:
 ```
 This would set the user as both a staff user and update the profile organization name.
 
+### Template attributes
+If you want to use extended attributes that are provided by SAML you can do so using template language.
+For instance, if organization name was sent as SAML attribute from your IdP you could replace the above example with:
+```json
+{
+  "is_staff": true,
+  "profile": {
+    "organization_name": "{{profile.raw_attributes.organization_name}}"
+  }
+}
+```
+The only context provided is `profile` which is a dictionary of items coming from [WorkOS Profile](https://workos.com/docs/reference/sso/profile).
+#### Auto Update
+If `WORKOS_AUTO_UPDATE` is set to `True` all template attributes will be re-evaluated at each login and will be updated.
+So in the above example if the SAML organization name changes the user profile would get automatically updated.
+If `WORKOS_AUTO_UPDATE` is set to `False` then only on JIT creation will the saved attributes be used.
+
+#### Username formatting
+You can use template attributes to set the username, for example:
+```json
+{
+  "username": "{{profile.first_name}}{{profile.last_name}}",
+  "is_staff": true,
+  "profile": {
+    "organization_name": "{{profile.raw_attributes.organization_name}}"
+  }
+}
+```
+Just make sure that whatever username you set will be unique across all your users.
+
+## Signals
+django-workos provides two signals your application can listen to:
+
+### workos_user_created
+Listening to this signal is completely optional but may be useful if you want to do something when a new user logs in.
+This signal is sent when a new user has been created due to a JIT user creation.
+If you are not planning on enabling JIT you will not need to listen to this signal.
+Example:
+
+```python
+from workos_login.signals import workos_user_created
+from django.dispatch import receiver
+from django.core.mail import send_mail
+from django.conf import settings
+
+@receiver(workos_user_created)
+def jit_user_created_handler(sender, **kwargs):
+    """
+    Handle a magic email custom send
+    """
+    new_user = kwargs["user"]
+    workos_profile = kwargs["profile"]
+    login_rule = kwargs["rule"]
+    body = "{first_name} {last_name} has just signed up.".format(first_name=new_user.first_name, last_name=new_user.last_name)
+    send_mail("New user created", body, settings.DEFAULT_FROM_EMAIL, [workos_profile["email"]])
+```
+
+### workos_send_magic_link
+If `WORKOS_SEND_CUSTOM_EMAIL` is set to `True` you must listen to this signal in order to send the email.
+Example:
+
+```python
+from workos_login.signals import workos_user_created
+from django.dispatch import receiver
+from django.core.mail import send_mail
+from django.conf import settings
+
+@receiver(workos_user_created)
+def jit_user_created_handler(sender, **kwargs):
+    """
+    Handle a magic email custom send
+    """
+    new_user = kwargs["user"]
+    magic_link = kwargs["link"]
+    login_rule = kwargs["rule"]
+    email = new_user.email
+    
+    body = "Your magic link: {}".format(magic_link)
+    send_mail("Your passwordless login link is ready", body, settings.DEFAULT_FROM_EMAIL, [email])
+```

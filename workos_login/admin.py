@@ -20,7 +20,7 @@ class LoginRuleAdmin(admin.ModelAdmin):
             'fields': ('email_regex', 'lookup_attributes',)
         }),
         ('SSO Options', {
-            'fields': ('connection_id', 'organization_id', 'jit_creation', 'jit_username_format', 'jit_groups', 'jit_attributes', 'portal_link')
+            'fields': ('connection_id', 'organization_id', 'saved_attributes', 'jit_creation', 'jit_groups', 'portal_link')
         }),
         ('MFA Options', {
             'fields': ('totp_organization_name',)
@@ -43,7 +43,7 @@ class LoginRuleAdmin(admin.ModelAdmin):
 
 
 class UserLoginAdmin(admin.ModelAdmin):
-    readonly_fields = fields = ("mfa_factor", "mfa_type", "sso_id", "idp_id", "user", "created_at", "last_modified")
+    readonly_fields = fields = ("mfa_factor", "mfa_type", "sso_id", "idp_id", "user", "rule", "created_at", "last_modified")
 
 
 admin.site.register(LoginRule, LoginRuleAdmin)

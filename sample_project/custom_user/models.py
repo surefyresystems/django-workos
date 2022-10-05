@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.core.mail import send_mail
 from django.db import models
 
@@ -16,6 +17,9 @@ class Profile(models.Model):
     organization_name = models.CharField(blank=True, max_length=255)
     user = models.OneToOneField(User, on_delete=models.CASCADE)
 
+    def __str__(self):
+        return str(self.user)
+
 
 @receiver(workos_send_magic_link)
 def my_handler(sender, **kwargs):
@@ -24,4 +28,4 @@ def my_handler(sender, **kwargs):
     """
     email = kwargs["user"].email
     body = "Your magic link: {}".format(kwargs["link"])
-    send_mail("New login link", body, "dustingtorres@gmail.com", [email])
+    send_mail("New login link", body, settings.DEFAULT_FROM_EMAIL, [email])

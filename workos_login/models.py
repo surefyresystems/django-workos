@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Optional
 
 from django.conf import settings
@@ -13,7 +14,7 @@ import re
 
 # Create your models here.
 from workos_login.exceptions import UnknownUsernameFormat
-from workos_login.utils import find_user
+from workos_login.utils import find_user, render_attribute
 
 
 class EmailRegexField(models.TextField):
@@ -82,12 +83,6 @@ class LoginMethods(models.TextChoices):
         return None
 
 
-class UsernameChoices(models.TextChoices):
-    EMAIL = "email", "Email Address"
-    IDP_ID = "idp", "Identity Provider ID"
-    WORKOS_ID = "workos", "Unique ID"
-
-
 class LoginRule(models.Model):
     name = models.CharField(max_length=255, help_text=_("Name for this config"), unique=True)
     lookup_attributes = models.JSONField(blank=True, null=True)
@@ -108,11 +103,9 @@ class LoginRule(models.Model):
     jit_groups = models.ManyToManyField("auth.Group", blank=True,
                                         help_text=_("Groups a user should be added to if user is being created."))
 
-    jit_attributes = models.JSONField(blank=True, default=dict,
-                                      help_text=_("Attributes to set on user instance when creating user"))
-
-    jit_username_format = models.CharField(max_length=10, blank=True, help_text=_("Username format for created accounts"),
-                                           choices=UsernameChoices.choices)
+    saved_attributes = models.JSONField(blank=True, default=dict,
+                                        help_text=_("Attributes to set on user instance when creating user. This is a Django template string that supports lookups like "
+                                                    "{{profile.raw_attributes['some-extended-attribute']}}. <a target='_blank' href='https://workos.com/docs/reference/sso/profile'>Profile</a> is defined by WorkOS"))
     objects = WorkosQuerySet.as_manager()
 
     class Meta:
@@ -171,12 +164,9 @@ class LoginRule(models.Model):
         if self.jit_creation and not self.sso:
             errors["jit_creation"] = _("You can only set account creation if using SSO")
 
-        if self.jit_creation and not self.jit_username_format:
-            errors["jit_username_format"] = _("You must select the username format")
 
-        if self.jit_attributes and not self.jit_creation:
-            errors["jit_attributes"] = _("This setting does not apply unless just in time "
-                                         "account creation is set.")
+        if self.saved_attributes and not self.sso:
+            errors["saved_attributes"] = _("Custom attributes only apply to SSO login.")
 
         if errors:
             raise ValidationError(errors)
@@ -216,13 +206,16 @@ class LoginRule(models.Model):
 
         return exists
 
-    def format_username(self, email, idp_id, workos_id):
-        if self.jit_username_format == UsernameChoices.EMAIL:
-            return email
-        if self.jit_username_format == UsernameChoices.IDP_ID:
-            return idp_id
-        if self.jit_username_format == UsernameChoices.WORKOS_ID:
-            return workos_id
+    def format_username(self, profile: dict) -> str:
+        if "username" in self.saved_attributes:
+            return render_attribute(self.saved_attributes["username"], profile)
+
+        if conf.WORKOS_JIT_USERNAME == "email":
+            return profile["email"]
+        if conf.WORKOS_JIT_USERNAME == "idp_id":
+            return profile["idp_id"]
+        if conf.WORKOS_JIT_USERNAME == "id":
+            return profile["id"]
         raise UnknownUsernameFormat
 
 class UserLogin(models.Model):
@@ -236,6 +229,8 @@ class UserLogin(models.Model):
     sso_id = models.CharField(max_length=255, blank=True)
     idp_id = models.CharField(max_length=255, blank=True)
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    # Rule associated with UserLogin - used for SSO particularly for being able to update saved_attributes
+    rule = models.ForeignKey(LoginRule, blank=True, null=True, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
     last_modified = models.DateTimeField(auto_now=True)
 
