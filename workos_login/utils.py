@@ -8,8 +8,10 @@ from django.template import Template, Context
 from workos.exceptions import BadRequestException
 
 from workos_login.conf import conf
-from django.db import models
+from django.db import models, transaction
 import workos
+
+from workos_login.exceptions import RelationDoesNotExist
 
 
 def get_users():
@@ -103,17 +105,49 @@ def mfa_enroll(user: models.Model, factor_id: str, mfa_type: str) -> None:
 
 def render_attribute(value: Any, profile: dict) -> Any:
     """
-    Helper to render an attribute that will convert strings to templates that are provided with `profile`
+    Helper to render an attribute that will convert strings to templates that are provided with `profile`.
+    If value is a dictionary it will nest down and render the leaf values.
     :param value: the attribute value to render
     :param profile: the profile dict passed from WorkOS
     :return: Rendered value to save
     """
+    if isinstance(value, dict):
+        for k, v in value.items():
+            value[k] = render_attribute(v, profile)
     if isinstance(value, str):
         t = Template(value)
         c = Context({"profile": profile})
         return t.render(c)
     return value
 
+
+def _link_attributes(obj: models.Model, attributes: Optional[dict], profile: dict) -> None:
+    """
+    Given a user object link any attributes that are needed.
+
+    :param obj: A user object to link related objects to
+    :param attributes: The saved attributes that will be used to try and link attributes.
+    :param profile: Profile as provided by WorkOS
+    """
+    if not attributes:
+        return
+
+    for field_name, value in attributes.items():
+        if field_name.startswith(("!", "~")) is False:
+            continue
+        required = field_name.startswith("!")
+        field_name = field_name[1:]
+        # This should not error out since "!/~" can only be used for fields that exist and have related lookups.
+        field = obj._meta.get_field(field_name)
+        try:
+            related_instance = field.related_model.objects.get(**render_attribute(value, profile))
+        except ObjectDoesNotExist:
+            related_instance = None
+
+        if required and related_instance is None:
+            raise RelationDoesNotExist()
+
+        setattr(obj, field_name, related_instance)
 
 def _update_attributes(obj: models.Model, attributes: Optional[dict], profile: dict, template_only: bool=False) -> None:
     """
@@ -128,6 +162,8 @@ def _update_attributes(obj: models.Model, attributes: Optional[dict], profile: d
         return
 
     for field_name, value in attributes.items():
+        if field_name.startswith(("!", "~")):
+            continue
         try:
             field = obj._meta.get_field(field_name)
         except FieldDoesNotExist:
@@ -147,6 +183,14 @@ def _update_attributes(obj: models.Model, attributes: Optional[dict], profile: d
                 if template_only is False:
                     setattr(obj, field_name, None)
             else:
+                # Might need to create object
+                related_obj = getattr(obj, field_name)
+                if related_obj is None:
+                    # Need to create object with the top level attributes
+                    related_obj_attrs = {k: v for k,v in value.items() if not isinstance(v, dict)}
+                    related_obj = field.related_model.objects.create(**related_obj_attrs)
+                    setattr(obj, field_name, related_obj)
+
                 _update_attributes(getattr(obj, field_name), value, profile)
 
     obj.save()
@@ -156,19 +200,22 @@ def jit_create_user(rule: models.Model, profile: dict) -> models.Model:
     """
     Given a profile from workos and a rule create a user
     """
-    username = rule.format_username(profile)
-    user = get_user_model().objects.create_user(username=username, email=profile["email"],
-                                                first_name=profile["first_name"], last_name=profile["last_name"],
-                                                is_active=False)
-    user.set_unusable_password()
-    _update_attributes(user, rule.saved_attributes, profile)
-    # Only mark them active once we know the user has been created successfully unless explicitly set in rule.
-    if "is_active" not in rule.saved_attributes:
-        user.is_active = True
-    user.save()
+    # Make sure if user (or related object fails) transaction rolls back
+    with transaction.atomic():
+        username = rule.format_username(profile)
+        user = get_user_model().objects.create_user(username=username, email=profile["email"],
+                                                    first_name=profile["first_name"], last_name=profile["last_name"],
+                                                    is_active=False)
+        user.set_unusable_password()
+        _link_attributes(user, rule.saved_attributes, profile)
+        _update_attributes(user, rule.saved_attributes, profile)
+        # Only mark them active once we know the user has been created successfully unless explicitly set in rule.
+        if "is_active" not in rule.saved_attributes:
+            user.is_active = True
+        user.save()
 
-    for group in rule.jit_groups.all():
-        user.groups.add(group)
+        for group in rule.jit_groups.all():
+            user.groups.add(group)
 
     return user
 

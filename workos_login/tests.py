@@ -121,8 +121,9 @@ class LoginRuleTest(TestCase):
 
     def test_jit_creation(self):
         sso_rule = LoginRule.objects.create(
-            name="JIR Creation",
+            name="JIT Creation",
             method=LoginMethods.SAML_SSO,
+            jit_creation=True,
             priority=3,
             saved_attributes={
                 "username": "{{profile.first_name}}{{profile.last_name}}"

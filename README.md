@@ -158,6 +158,7 @@ In the sample project you could have saved attributes that look like:
 ```
 This would set the user as both a staff user and update the profile organization name.
 
+
 ### Template attributes
 If you want to use extended attributes that are provided by SAML you can do so using template language.
 For instance, if organization name was sent as SAML attribute from your IdP you could replace the above example with:
@@ -174,6 +175,46 @@ The only context provided is `profile` which is a dictionary of items coming fro
 If `WORKOS_AUTO_UPDATE` is set to `True` all template attributes will be re-evaluated at each login and will be updated.
 So in the above example if the SAML organization name changes the user profile would get automatically updated.
 If `WORKOS_AUTO_UPDATE` is set to `False` then only on JIT creation will the saved attributes be used.
+
+### Linking to existing objects
+django-workos provides the ability to link to existing objects during JIT creation.
+For instance, if we have a foreign key from a user object to a location model we can link the two with `saved_attributes` like this:
+```json
+{
+  "~location": {
+    "locationId": "{{profile.raw_attributes.locationUuid}}"
+  },
+  "location": {
+    "address": "{{profile.raw_attributes.locationAddress}}" 
+  }
+}
+```
+Any field that starts with a `~` signifies to try and do a lookup before a creation of a related object.
+This roughly translates to:
+```python
+try:
+    location = Location.objects.get(locationId=profile.raw_attributes.locationUuid)
+    location.address = profile.raw_attributes.locationAddress
+    user.location = location
+except ObjectDoesNotExist:
+    Location.object.create(
+        locationId=profile.raw_attributes.locationUuid,
+        address=profile.raw_attributes.locationAddress
+    )
+```
+
+If you want to not create the user unless the object already exists use `!` instead of `~`.
+```json
+{
+  "!location": {
+    "locationId": "{{profile.raw_attributes.locationUuid}}"
+  },
+  "location": {
+    "address": "{{profile.raw_attributes.locationAddress}}"
+  }
+}
+```
+In the above cause the JIT user will not be created if the `locationId` does not exist.
 
 #### Username formatting
 You can use template attributes to set the username, for example:

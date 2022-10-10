@@ -9,8 +9,14 @@ from django.dispatch import receiver
 from workos_login.signals import workos_send_magic_link
 
 
+class OfficeLocation(models.Model):
+    address = models.CharField(max_length=1024, blank=False, null=False, default=None)
+    location_id = models.CharField(max_length=50, unique=True, blank=False, null=False, default=None)
+
 class User(AbstractUser):
     is_external = models.BooleanField(default=False)
+    user_location = models.ForeignKey(OfficeLocation, blank=True, null=True, on_delete=models.CASCADE)
+
 
 
 class Profile(models.Model):
