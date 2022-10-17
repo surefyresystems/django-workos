@@ -60,6 +60,7 @@ ROOT_URLCONF = 'workos_project.urls'
 # WORKOS_API_KEY = 'This can be set via env variable or here'
 # WORKOS_CLIENT_ID = 'This can be set via env variable or here'
 WORKOS_SEND_CUSTOM_EMAIL = True
+WORKOS_EMAIL_LOOKUP = False
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 LOGIN_REDIRECT_URL = '/home/'

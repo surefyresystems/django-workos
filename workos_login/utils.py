@@ -61,11 +61,24 @@ def user_has_mfa_enabled(user: models.Model) -> bool:
 
 
 def get_user_login_model(user: models.Model) -> models.Model:
+    """
+    Get or create a user login model
+    """
     from workos_login.models import UserLogin
     try:
         return UserLogin.objects.get(user=user)
     except UserLogin.DoesNotExist:
         return UserLogin.objects.create(user=user)
+
+
+def has_user_login_model(user: models.Model) -> bool:
+    """
+    Check to see if a user login model exists.
+    :param user: The user object
+    :return: True if user model exists, false otherwise.
+    """
+    from workos_login.models import UserLogin
+    return UserLogin.objects.filter(user=user).exists()
 
 
 def totp_verify_code(factor_id: str, code: str) -> bool:

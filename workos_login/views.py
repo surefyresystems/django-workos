@@ -22,7 +22,7 @@ from workos_login.models import LoginRule, UserLogin, LoginMethods
 from workos_login.conf import conf
 from workos_login.signals import workos_user_created, workos_send_magic_link
 from workos_login.utils import user_has_mfa_enabled, get_user_login_model, mfa_enroll, jit_create_user, \
-    pack_state, unpack_state, update_user_profile, find_user_by_email, get_users
+    pack_state, unpack_state, update_user_profile, find_user_by_email, get_users, has_user_login_model
 
 SESSION_AUTHENTICATED_USER_ID = "workos_auth_user_id"  # Stores the authenticated user id (used by MFA)
 SESSION_USER_ID = "workos_user_id"  # Store the user ID in SSO state.
@@ -127,6 +127,7 @@ class BaseCallbackView(RedirectView):
         code = self.request.GET.get("code")
         state = self.request.GET.get("state")
         user = None
+        username = None
         if (state):
             state = unpack_state(state)
 
@@ -141,14 +142,29 @@ class BaseCallbackView(RedirectView):
             # User has logged in before, and we know the user account
             user = user_login.user
             rule = user_login.rule
+
             if(state):
                 next_url = state[SESSION_NEXT]
+                if user.pk != state[SESSION_USER_ID]:
+                    return self.create_error(_("Your username does not match the account you selected."))
         elif (state):
+            # Login based on a rule, but this is the first time a user is loging in
+            # via SSO (since there is no user_login yet) or it is JIT creation.
             rule_id = state[SESSION_RULE_ID]
             user_id = state[SESSION_USER_ID]
             next_url = state[SESSION_NEXT]
+            username = state[STATE_USERNAME]
             if(user_id):
                 user = get_users().get(pk=user_id)
+
+                if has_user_login_model(user):
+                    return self.create_error(_("Selected account does not match the user account"))
+                elif not user.email or user.email.lower() != profile["email"].lower():
+                    # We have a user on file and this is the first time they are logging in via SSO (since there is no user login).
+                    # But the email does not match. For the first association the email address must match
+                    # to ensure the user is logging into the account they are supposed to.
+                    return self.create_error(_("Your email address does not match your user account on file. Please try again"))
+
             rule = LoginRule.objects.get(pk=rule_id)
         elif self.allow_idp_initiated:
             # First time IDP Initiated
@@ -178,6 +194,12 @@ class BaseCallbackView(RedirectView):
 
             if rule != expected_rule:
                 return self.create_error(_("Account username does not match your request. Please try again"))
+
+            # If there is a username but no user it is because we are doing an SP JIT login
+            # that matched an email regex rule. Make sure that the email associated with the
+            # SSO account matches the username the user entered (which would be their email).
+            if username and username != profile["email"]:
+                return self.create_error(_("The account selected does not match username entered. Please try again"))
 
             try:
                 user = jit_create_user(rule, profile)
