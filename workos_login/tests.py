@@ -57,7 +57,8 @@ class LoginRuleTest(TestCase):
         get_user_model().objects.create_user(
             first_name="Test",
             last_name="MFA",
-
+            email="test@mfa.com",
+            username="test"
         )
         priority_one = LoginRule.objects.create(
             name="Pri 1",
@@ -81,7 +82,7 @@ class LoginRuleTest(TestCase):
             email_regex="@mfa.com"
         )
 
-        rule = LoginRule.objects.find_rule_for_username("user1@mfa.com")
+        rule = LoginRule.objects.find_rule_for_username("test")
         self.assertEqual(rule, priority_two)
 
     @patch('workos.client.sso.get_profile_and_token', wraps=partial(get_profile_and_token, organization_id="sso_org", id="1234"), org_id="org_id")
