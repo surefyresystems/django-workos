@@ -90,7 +90,7 @@ def login_session_user(request: HttpRequest):
 
 @require_GET
 def get_login_method(request: HttpRequest):
-    username = request.GET.get("username")
+    username = request.GET.get("username", default="").strip()
     rule_id = None
     login_method = LoginMethods.USERNAME
     if not username:
