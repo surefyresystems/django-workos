@@ -261,12 +261,12 @@ If `WORKOS_SEND_CUSTOM_EMAIL` is set to `True` you must listen to this signal in
 Example:
 
 ```python
-from workos_login.signals import workos_user_created
+from workos_login.signals import workos_send_magic_link
 from django.dispatch import receiver
 from django.core.mail import send_mail
 from django.conf import settings
 
-@receiver(workos_user_created)
+@receiver(workos_send_magic_link)
 def jit_user_created_handler(sender, **kwargs):
     """
     Handle a magic email custom send
