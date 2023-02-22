@@ -11,6 +11,12 @@ Django WorKOS adds support for the following login methods:
 You can enable one or more of the above methods.
 Configuration is done using Login Rules. 
 
+## Installing
+
+```
+pip install django-workos
+```
+
 ## Sample Project
 View a [sample project](sample_project/README.md) or view [demo videos](sample_project/README.md#demo-videos) here
 
