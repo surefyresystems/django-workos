@@ -17,3 +17,6 @@ classifiers = [
 dependencies = [
     "workos==1.14"
 ]
+
+[project.urls]
+"Homepage" = "https://github.com/surefyresystems/django-workos"
