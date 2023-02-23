@@ -2,7 +2,10 @@
 ## Quick Start
 1. Update your WorkOS staging environment to allow for callbacks to your `http://localhost:8000/accounts/callback/magic/` and `http://localhost:8000/accounts/callback/sso/`
 2. Set your credentials WorkOS credentials. This can be done with environment variables or go to `settings.py` and update lines 60 & 61 to uncomment and set `WORKOS_API_KEY` `WORKOS_CLIENT_ID`
-3. Run `python manage.py migrate` to create the polls models.
+3. Install dependencies (in a virtual environment):
+   4. `pip install -e ../.` to install django-workos
+   5. `pip install django`
+3. Run `python manage.py migrate` to create the models.
 4. Start the development server `python manage.py runserver` and visit http://127.0.0.1:8000/
 5. Try logging in with the below default users
 

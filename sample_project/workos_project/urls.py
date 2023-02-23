@@ -18,7 +18,7 @@ from django.contrib.auth.decorators import login_required
 from django.urls import path, include
 from django.views.generic import TemplateView
 
-from sample_project.custom_user.views import home
+from custom_user.views import home
 
 urlpatterns = [
     path('admin/', admin.site.urls),

@@ -3,6 +3,7 @@ from typing import Optional
 from django.contrib import messages
 from django.contrib.auth.mixins import UserPassesTestMixin
 from django.contrib.auth.views import LoginView
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
 from django.http import JsonResponse, Http404, HttpRequest
 from django.shortcuts import redirect, resolve_url
@@ -22,7 +23,7 @@ from workos_login.models import LoginRule, UserLogin, LoginMethods
 from workos_login.conf import conf
 from workos_login.signals import workos_user_created, workos_send_magic_link
 from workos_login.utils import user_has_mfa_enabled, get_user_login_model, mfa_enroll, jit_create_user, \
-    pack_state, unpack_state, update_user_profile, find_user_by_email, get_users, has_user_login_model
+    pack_state, unpack_state, update_user_profile, find_user_by_email, get_users, has_user_login_model, find_user
 
 SESSION_AUTHENTICATED_USER_ID = "workos_auth_user_id"  # Stores the authenticated user id (used by MFA)
 SESSION_USER_ID = "workos_user_id"  # Store the user ID in SSO state.
@@ -72,7 +73,7 @@ def get_session_user(request: HttpRequest):
 
 def get_session_rule(request: HttpRequest) -> Optional[LoginRule]:
     rule_id = request.session[SESSION_RULE_ID]
-    if(rule_id):
+    if rule_id:
         return LoginRule.objects.get(pk=rule_id)
     return None
 
@@ -97,8 +98,19 @@ def get_login_method(request: HttpRequest):
         return JsonResponse({"message": "Username is required"}, status=400)
 
     rule = LoginRule.objects.find_rule_for_username(username)
-    if(rule):
-        login_method = LoginMethods(rule.method).frontend_method
+    if rule:
+        method = LoginMethods(rule.method)
+        login_method = method.frontend_method
+        if not method.is_sso:
+            # If method is not SSO check if MFA is enabled, if so that is the method we will use.
+            # Since the user has enabled MFA for themselves.
+            try:
+                user = find_user(username)
+                if user_has_mfa_enabled(user):
+                    login_method = LoginMethods.MFA
+            except ObjectDoesNotExist:
+                pass
+
 
     return JsonResponse({"method": login_method}, status=200)
 
@@ -118,17 +130,23 @@ class BaseCallbackView(RedirectView):
         :param user_login: the UserLogin object for this user
         :param workos_profile: the workos profile
         """
-        pass
+        # Save the workos id
+        user_login.sso_id = workos_profile["id"]
+        user_login.save()
 
     def find_user_login(self, workos_profile: dict) -> Optional[UserLogin]:
-        return None
+        try:
+            user_login = UserLogin.objects.get(sso_id=workos_profile["id"])
+        except UserLogin.DoesNotExist:
+            user_login = None
+        return user_login
 
     def get_redirect_url(self, *args, **kwargs):
         code = self.request.GET.get("code")
         state = self.request.GET.get("state")
         user = None
         username = None
-        if (state):
+        if state:
             state = unpack_state(state)
 
         profile = workos.client.sso.get_profile_and_token(code).to_dict()["profile"]
@@ -143,18 +161,18 @@ class BaseCallbackView(RedirectView):
             user = user_login.user
             rule = user_login.rule
 
-            if(state):
+            if state:
                 next_url = state[SESSION_NEXT]
                 if user.pk != state[SESSION_USER_ID]:
                     return self.create_error(_("Your username does not match the account you selected."))
-        elif (state):
+        elif state:
             # Login based on a rule, but this is the first time a user is loging in
             # via SSO (since there is no user_login yet) or it is JIT creation.
             rule_id = state[SESSION_RULE_ID]
             user_id = state[SESSION_USER_ID]
             next_url = state[SESSION_NEXT]
             username = state[STATE_USERNAME]
-            if(user_id):
+            if user_id:
                 user = get_users().get(pk=user_id)
 
                 if has_user_login_model(user):

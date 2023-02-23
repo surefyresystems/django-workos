@@ -9,7 +9,7 @@ from django.core.exceptions import ValidationError
 import workos
 
 from workos_login.models import LoginRule
-from workos_login.utils import find_user, verify_challenge, totp_verify_code
+from workos_login.utils import find_user, verify_challenge, totp_verify_code, user_has_mfa_enabled
 
 
 class BootstrapMixin:
@@ -57,16 +57,17 @@ class LoginForm(BootstrapMixin, AuthenticationForm):
             raise self.get_invalid_login_error()
         self.rule_cache = rule
 
-        if rule.requires_password:
-            if not self.cleaned_data.get("password"):
-                raise self.get_invalid_login_error()
-            return super().clean()
-
-        # Both the below need a valid user
         try:
             user = find_user(self.cleaned_data.get("username"))
         except ObjectDoesNotExist:
             user = None
+
+        if rule.requires_password or (user and user_has_mfa_enabled(user)):
+            # Even if the rule doesn't require a password but the user has mfa enabled, that will take precedence.
+            # MFA is always checked before magic email and will be respected to require MFA.
+            if not self.cleaned_data.get("password"):
+                raise self.get_invalid_login_error()
+            return super().clean()
 
         self.user_cache = user
 

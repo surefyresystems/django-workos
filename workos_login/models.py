@@ -197,7 +197,18 @@ class LoginRule(models.Model):
     def rule_applies_to_user(self, user: models.Model):
         exists = False
         if self.lookup_attributes:
-            exists = get_users().filter(**self.lookup_attributes).filter(pk=user.pk).exists()
+            # Check two special keys first "has_mfa" checks
+            attrs = self.lookup_attributes
+            has_mfa = attrs.pop("has_mfa", False)
+            if has_mfa:
+                exists = UserLogin.objects.filter(user=user).exclude(mfa_factor="").exists()
+
+            has_sso = attrs.pop("has_sso", False)
+            if has_sso and not exists:
+                exists = UserLogin.objects.filter(user=user).exclude(sso_id="").exists()
+
+            if not exists and attrs:
+                exists = get_users().filter(**attrs).filter(pk=user.pk).exists()
 
         if not exists:
             # The user attributes do not match, check if email domain matches
