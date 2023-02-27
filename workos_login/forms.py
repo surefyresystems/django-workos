@@ -79,7 +79,7 @@ class LoginForm(BootstrapMixin, AuthenticationForm):
             # Make sure that there is either an active user or that there is a JIT
             if not rule.sso:
                 raise self.get_invalid_login_error()
-            if not rule.jit_creation:
+            if not rule.jit_creation_type:
                 if not user:
                     raise self.get_invalid_login_error()
                 self.confirm_login_allowed(user)

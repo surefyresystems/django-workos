@@ -2,7 +2,7 @@ from django.test import TestCase
 
 from .models import OfficeLocation
 from workos_login.exceptions import RelationDoesNotExist
-from workos_login.models import LoginRule, LoginMethods
+from workos_login.models import LoginRule, LoginMethods, JitMethods
 from workos_login.utils import jit_create_user
 
 
@@ -13,7 +13,7 @@ class SampleTests(TestCase):
         self.sso_rule = LoginRule.objects.create(
             name="JIT Creation",
             method=LoginMethods.SAML_SSO,
-            jit_creation=True,
+            jit_creation_type=JitMethods.ATTRIBUTES_MATCH,
             priority=3,
         )
     def test_user_creation(self):

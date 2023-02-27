@@ -41,15 +41,20 @@ class WorkosQuerySet(models.QuerySet):
                 return rule
         return None
 
-    def find_rule_for_email(self, email: str) -> Optional["LoginRule"]:
+    def find_rule_for_jit(self, email: str, connection_id: Optional[str], organization_id: Optional[str]) -> Optional["LoginRule"]:
         """Find a rule for a matching an email address
         This could return a rule that matches an email address even if JIT is not enabled and the user does not exist.
         This is used for IdP initiated logins to try and find a matching rule before associated to user or
         creating user (if JIT is enabled).
         """
         for rule in self.all():
-            if rule.test_email(email):
+            connection_match = (rule.organization_id == organization_id or rule.connection_id == connection_id)
+            if rule.jit_creation_type == JitMethods.IDP and connection_match:
                 return rule
+            # For ATTRIBUTES_MATCH connection_match is not checked since it could be google or microsoft login.
+            if rule.jit_creation_type == JitMethods.ATTRIBUTES_MATCH and rule.test_email(email):
+                return rule
+
         return None
 
 
@@ -82,14 +87,19 @@ class LoginMethods(models.TextChoices):
         return None
 
 
+class JitMethods(models.TextChoices):
+    ATTRIBUTES_MATCH = "attributes", "Matching Attributes"
+    IDP = "idp", "Matching Attributes or IdP login"
+
 class LoginRule(models.Model):
     name = models.CharField(max_length=255, help_text=_("Name for this config"), unique=True)
     lookup_attributes = models.JSONField(blank=True, null=True)
     totp_organization_name = models.CharField(max_length=255, blank=True, help_text=_("The name of organization which "
                                                                                     "shows in authenticator apps."))
     method = models.CharField(choices=LoginMethods.choices, max_length=15)
-    jit_creation = models.BooleanField(default=False, verbose_name=_("Just in time account creation"),
-                                       help_text=_("If enabled a user account will be automatically created "
+
+    jit_creation_type = models.CharField(choices=JitMethods.choices, verbose_name=_("Just in time account creation type"),
+                                         max_length=10, blank=True, help_text=_("If enabled a user account will be automatically created "
                                                    "if one does not exist."))
     priority = models.IntegerField(default=100, help_text=_("Priority of this rule. Lower numbers are checked first"),
                                    unique=True)
@@ -156,12 +166,12 @@ class LoginRule(models.Model):
             errors["connection_id"] = _("For SSO you must provide either connection ID or organization ID")
             errors["organization_id"] = _("For SSO you must provide either connection ID or organization ID")
 
-        if not self.jit_creation and not self.lookup_attributes and not self.email_regex:
+        if not self.jit_creation_type and not self.lookup_attributes and not self.email_regex:
             errors["lookup_attributes"] = errors["email_regex"] = _("This rule does not apply to any users. "
                                                                     "Set lookup attributes or an email pattern.")
 
-        if self.jit_creation and not self.sso:
-            errors["jit_creation"] = _("You can only set account creation if using SSO")
+        if self.jit_creation_type and not self.sso:
+            errors["jit_creation_type"] = _("You can only set account creation if using SSO")
 
 
         if self.saved_attributes and not self.sso:
@@ -186,7 +196,7 @@ class LoginRule(models.Model):
         if user:
             return self.rule_applies_to_user(user)
 
-        if self.jit_creation is False:
+        if not self.jit_creation_type:
             return False
 
         if self.test_email(username_or_email):

@@ -194,7 +194,9 @@ class BaseCallbackView(RedirectView):
                 rule = LoginRule.objects.find_rule_for_user(user)
             else:
                 # No user found, but maybe a JIT rule exists for this email address
-                rule = LoginRule.objects.find_rule_for_email(profile["email"])
+                rule = LoginRule.objects.find_rule_for_jit(profile["email"],
+                                                           connection_id=profile.get("connection_id"),
+                                                           organization_id=profile.get("organization_id"))
             if rule is None:
                 return self.create_error(_("No login was found, please contact your administrator"))
             if rule.organization_id != profile["organization_id"] and rule.connection_id != profile["connection_id"]:
@@ -203,12 +205,14 @@ class BaseCallbackView(RedirectView):
             return self.create_error(_("Unable to login. Please contact your administrator."))
 
         if user is None:
-            if rule.jit_creation is False:
+            if not rule.jit_creation_type:
                 return self.create_error(_("Your user account has not been provisioned. Please contact your administrator to create an account."))
 
             # Since there is no user this must have been an email match, make sure
             # the email they used is for the correct rule (ensuring they didn't select a wrong account)
-            expected_rule = LoginRule.objects.find_rule_for_email(profile["email"])
+            expected_rule = LoginRule.objects.find_rule_for_jit(profile["email"],
+                                                                connection_id=profile.get("connection_id"),
+                                                                organization_id=profile.get("organization_id"))
 
             if rule != expected_rule:
                 return self.create_error(_("Account username does not match your request. Please try again"))
