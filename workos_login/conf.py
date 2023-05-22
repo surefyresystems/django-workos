@@ -46,6 +46,10 @@ class Settings:
         return "mfa"
 
     @property
+    def WORKOS_METHOD_EMAIL_MFA(self) -> str:
+        return "email_mfa"
+
+    @property
     def WORKOS_METHOD_MAGIC(self) -> str:
         return "magic"
 

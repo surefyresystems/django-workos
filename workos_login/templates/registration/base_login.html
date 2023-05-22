@@ -104,7 +104,7 @@
       const response = JSON.parse(this.responseText);
       const rule = response.rule;
       const method = response.method;
-      if(method === 'username' || method === 'mfa'){
+      if(method === 'username' || method === 'mfa' || method === 'email_mfa'){
         showInput('id_password');
         showItem('forgot-password');
       }

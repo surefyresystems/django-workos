@@ -323,7 +323,7 @@ class WorkosLoginView(LoginView):
             # This will log in the user - clear the workos session vars
             clear_session_vars(self.request)
             return super(WorkosLoginView, self).form_valid(form)
-        elif method == LoginMethods.MAGIC_LINK:
+        elif method == LoginMethods.MAGIC_LINK or method == LoginMethods.EMAIL_MFA:
             email = user.email
             uri = conf.WORKOS_MAGIC_REDIRECT_URI if conf.WORKOS_MAGIC_REDIRECT_URI else self.request.build_absolute_uri(reverse("magic_callback"))
             session = workos.client.passwordless.create_session({

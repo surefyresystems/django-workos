@@ -60,6 +60,7 @@ class WorkosQuerySet(models.QuerySet):
 
 class LoginMethods(models.TextChoices):
     MFA = conf.WORKOS_METHOD_MFA, "MFA"
+    EMAIL_MFA = conf.WORKOS_METHOD_EMAIL_MFA, "Email MFA"
     MAGIC_LINK = conf.WORKOS_METHOD_MAGIC, "Passwordless Email"
     GOOGLE_SSO = conf.WORKOS_METHOD_GOOGLE_OAUTH, "Google SSO"
     MICROSOFT_SSO = conf.WORKOS_METHOD_MICROSOFT_OAUTH, "Microsoft SSO"
@@ -141,7 +142,7 @@ class LoginRule(models.Model):
 
     @property
     def requires_password(self) -> bool:
-        return self.mfa or self.username
+        return self.mfa or self.username or self.method == LoginMethods.EMAIL_MFA
 
     def clean(self):
         errors = {}
