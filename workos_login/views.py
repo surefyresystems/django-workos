@@ -120,8 +120,13 @@ class BaseCallbackView(RedirectView):
     permanent = False
     allow_idp_initiated = False
 
-    def create_error(self, msg: str) -> str:
-        messages.error(self.request, msg)
+    def create_error(self, msg: str | list[str]) -> str:
+        if isinstance(msg, list):
+            for m in msg:
+                messages.error(self.request, m)
+        else:
+            messages.error(self.request, msg)
+
         return reverse("login")
 
     def update_user_login(self, user_login: UserLogin, workos_profile: dict) -> None:
@@ -144,6 +149,10 @@ class BaseCallbackView(RedirectView):
     def get_redirect_url(self, *args, **kwargs):
         code = self.request.GET.get("code")
         state = self.request.GET.get("state")
+        error = self.request.GET.get("error")
+        error_description = self.request.GET.get("error_description")
+        if error:
+            return self.create_error([_("There was an logging in please try again."), _("%(error_code)s: %(error_message)s") % {"error_code": str(error), "error_message": str(error_description)}])
         user = None
         username = None
         if state:
@@ -172,18 +181,24 @@ class BaseCallbackView(RedirectView):
             user_id = state[SESSION_USER_ID]
             next_url = state[SESSION_NEXT]
             username = state[STATE_USERNAME]
+            rule = LoginRule.objects.get(pk=rule_id)
             if user_id:
                 user = get_users().get(pk=user_id)
 
                 if has_user_login_model(user):
-                    return self.create_error(_("Selected account does not match the user account"))
+                    # Magic link can change the sso_id if the email changes in the user model.
+                    # So this case is allowed without erroring out and the related UserLogin model
+                    # will get updated lower down.
+                    # This is not allowed for SSO since it likely means they selected the wrong account
+                    # in the case they have multiple user accounts with the iDP.
+                    if not rule.magic_link:
+                        return self.create_error(_("Selected account does not match the user account"))
                 elif not user.email or user.email.lower() != profile["email"].lower():
                     # We have a user on file and this is the first time they are logging in via SSO (since there is no user login).
                     # But the email does not match. For the first association the email address must match
                     # to ensure the user is logging into the account they are supposed to.
                     return self.create_error(_("Your email address does not match your user account on file. Please try again"))
 
-            rule = LoginRule.objects.get(pk=rule_id)
         elif self.allow_idp_initiated:
             # First time IDP Initiated
             # If they have logged in before we would have a user_login created already
@@ -239,7 +254,8 @@ class BaseCallbackView(RedirectView):
             return self.create_error(_("Your user account is not active. Please contact your administrator."))
 
         if not user_login:
-            # First time through get the user login and set the rule that is being used.
+            # First time through or could not match user_login based on workosID (this happens if using magic email and user email address changed).
+            # Get the user login and set the rule that is being used.
             user_login = get_user_login_model(user)
             user_login.rule = rule
             user_login.save()
