@@ -278,7 +278,7 @@ class SSOCallbackView(BaseCallbackView):
 
     def find_user_login(self, workos_profile: dict) -> Optional[UserLogin]:
         try:
-            user_login = UserLogin.objects.get(sso_id=workos_profile["id"])
+            user_login = UserLogin.objects.get(idp_id=workos_profile["idp_id"])
         except UserLogin.DoesNotExist:
             user_login = None
         return user_login
