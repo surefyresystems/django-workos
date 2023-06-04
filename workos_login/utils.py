@@ -11,7 +11,7 @@ from workos_login.conf import conf
 from django.db import models, transaction
 import workos
 
-from workos_login.exceptions import RelationDoesNotExist
+from workos_login.exceptions import RelationDoesNotExist, ImproperConfigurationError
 
 
 def get_users():
@@ -116,20 +116,21 @@ def mfa_enroll(user: models.Model, factor_id: str, mfa_type: str) -> None:
     user_login.save()
 
 
-def render_attribute(value: Any, profile: dict) -> Any:
+def render_attribute(value: Any, profile: dict, object: models.Model) -> Any:
     """
     Helper to render an attribute that will convert strings to templates that are provided with `profile`.
     If value is a dictionary it will nest down and render the leaf values.
     :param value: the attribute value to render
+    :param object: the current object
     :param profile: the profile dict passed from WorkOS
     :return: Rendered value to save
     """
     if isinstance(value, dict):
         for k, v in value.items():
-            value[k] = render_attribute(v, profile)
+            value[k] = render_attribute(v, profile, object)
     if isinstance(value, str):
         t = Template(value)
-        c = Context({"profile": profile})
+        c = Context({"profile": profile, "object": object})
         return t.render(c)
     return value
 
@@ -153,7 +154,7 @@ def _link_attributes(obj: models.Model, attributes: Optional[dict], profile: dic
         # This should not error out since "!/~" can only be used for fields that exist and have related lookups.
         field = obj._meta.get_field(field_name)
         try:
-            related_instance = field.related_model.objects.get(**render_attribute(value, profile))
+            related_instance = field.related_model.objects.get(**render_attribute(value, profile, obj))
         except ObjectDoesNotExist:
             related_instance = None
 
@@ -182,14 +183,14 @@ def _update_attributes(obj: models.Model, attributes: Optional[dict], profile: d
         except FieldDoesNotExist:
             # Even though this isn't a proper field it might be some custom attribute or settable property.
             # Still set the attribute if it exists on the object.
-            if hasattr(obj, field_name) and (template_only is False or value != render_attribute(value, profile)):
-                setattr(obj, field_name, render_attribute(value, profile))
+            if hasattr(obj, field_name) and (template_only is False or value != render_attribute(value, profile, obj)):
+                setattr(obj, field_name, render_attribute(value, profile, obj))
             continue
 
         if field.is_relation is False:
             # If template only, do not update if the value equals the rendered value which implies it is not a template field.
-            if template_only is False or value != render_attribute(value, profile):
-                setattr(obj, field_name, render_attribute(value, profile))
+            if template_only is False or value != render_attribute(value, profile, obj):
+                setattr(obj, field_name, render_attribute(value, profile, obj))
 
         elif field.many_to_one or field.one_to_one:
             if value is None:
@@ -200,11 +201,27 @@ def _update_attributes(obj: models.Model, attributes: Optional[dict], profile: d
                 related_obj = getattr(obj, field_name)
                 if related_obj is None:
                     # Need to create object with the top level attributes
-                    related_obj_attrs = {k: v for k,v in value.items() if not isinstance(v, dict)}
+                    related_obj_attrs = {k: render_attribute(v, profile, obj) for k,v in value.items() if not (isinstance(v, dict) or isinstance(v, list))}
                     related_obj = field.related_model.objects.create(**related_obj_attrs)
                     setattr(obj, field_name, related_obj)
 
                 _update_attributes(getattr(obj, field_name), value, profile)
+
+        elif field.many_to_many or field.one_to_many:
+            if not isinstance(value, list):
+                raise ImproperConfigurationError("Many to many or reverse relations must be of type array")
+            for item in value:
+                related_obj_attrs = {k: render_attribute(v, profile, obj) for k, v in item.items() if not (isinstance(v, dict) or isinstance(v, list))}
+
+                related_manager = getattr(obj, field_name)
+                try:
+                    related_obj, created = related_manager.get_or_create(**related_obj_attrs)
+                    _update_attributes(related_obj, item, profile)
+                except MultipleObjectsReturned:
+                    for related_obj in related_manager.filter(**related_obj_attrs):
+                        _update_attributes(related_obj, item, profile)
+
+
 
     obj.save()
 

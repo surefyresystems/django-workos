@@ -4,3 +4,6 @@ class UnknownUsernameFormat(Exception):
 
 class RelationDoesNotExist(Exception):
     pass
+
+class ImproperConfigurationError(Exception):
+    pass

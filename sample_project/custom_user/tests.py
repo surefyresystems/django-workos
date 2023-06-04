@@ -1,6 +1,6 @@
 from django.test import TestCase
 
-from .models import OfficeLocation
+from .models import OfficeLocation, User, Address
 from workos_login.exceptions import RelationDoesNotExist
 from workos_login.models import LoginRule, LoginMethods, JitMethods
 from workos_login.utils import jit_create_user
@@ -10,6 +10,7 @@ from workos_login.utils import jit_create_user
 class SampleTests(TestCase):
 
     def setUp(self):
+        User.objects.all().delete() # Delete the sample users
         self.sso_rule = LoginRule.objects.create(
             name="JIT Creation",
             method=LoginMethods.SAML_SSO,
@@ -26,7 +27,8 @@ class SampleTests(TestCase):
             "raw_attributes": {
                 "location": {
                     "locId": "123abc",
-                    "address": "fake addr"
+                    "address": "fake addr",
+                    "city": "Fake City"
                 }
             }
         }
@@ -37,14 +39,21 @@ class SampleTests(TestCase):
             },
             "user_location": {
                 "location_id": "{{profile.raw_attributes.location.locId}}",
-                "address": "{{profile.raw_attributes.location.address}}"
+                "addresses": [
+                    {
+                        "address1": "{{profile.raw_attributes.location.address}}",
+                        "city": "{{profile.raw_attributes.location.city}}"
+                    }
+                ]
             }
         }
         self.sso_rule.saved_attributes = saved_attrs
 
         user = jit_create_user(self.sso_rule, profile)
+        user = User.objects.get(pk=user.pk)
         self.assertEqual(user.first_name, "Santana")
-        self.assertEqual(user.user_location.address, "fake addr")
+        self.assertEqual(user.user_location.addresses.first().address1, "fake addr")
+        self.assertEqual(user.user_location.addresses.first().city, "Fake City")
         self.assertEqual(user.user_location.location_id, "123abc")
 
 
@@ -72,7 +81,12 @@ class SampleTests(TestCase):
             },
             "user_location": {
                 "location_id": "{{profile.raw_attributes.location.locId}}",
-                "address": "{{profile.raw_attributes.location.address}}"
+                "addresses": [
+                    {
+                        "address1": "{{profile.raw_attributes.location.address}}",
+                        "state": "CA"
+                    }
+                ]
             }
         }
         self.sso_rule.saved_attributes = saved_attrs
@@ -81,9 +95,37 @@ class SampleTests(TestCase):
             user = jit_create_user(self.sso_rule, profile)
 
         # Now create the location, but don't set the address - it will get filled out by update
-        ol = OfficeLocation.objects.create(location_id="123abc", address="real addr")
+        ol = OfficeLocation.objects.create(location_id="123abc")
         user = jit_create_user(self.sso_rule, profile)
+        user = User.objects.get(pk=user.pk)
         self.assertEqual(user.first_name, "Santana")
-        self.assertEqual(user.user_location.address, "fake addr")
+        self.assertEqual(user.user_location.addresses.first().address1, "fake addr")
+        self.assertEqual(user.user_location.addresses.first().state, "CA")
         self.assertEqual(user.user_location.location_id, "123abc")
         self.assertEqual(user.user_location, ol)
+        self.assertEqual(user.user_location, ol)
+        self.assertEqual(User.objects.count(), 1)
+
+        profile = {
+            "first_name": "Second",
+            "last_name": "Clause",
+            "email": "secondclause@northpole.net",
+            "id": "432",
+            "idp_id": "444",
+            "raw_attributes": {
+                "location": {
+                    "locId": "123abc",
+                    "address": "fake addr"
+                }
+            }
+        }
+        user = jit_create_user(self.sso_rule, profile)
+        user = User.objects.get(pk=user.pk)
+
+        self.assertEqual(user.first_name, "Second")
+        self.assertEqual(user.user_location.addresses.first().address1, "fake addr")
+        self.assertEqual(user.user_location.addresses.first().state, "CA")
+        self.assertEqual(user.user_location.location_id, "123abc")
+        self.assertEqual(user.user_location, ol)
+        self.assertEqual(User.objects.count(), 2)
+        self.assertEqual(Address.objects.count(), 1, "Since address did not change there should only be one")
