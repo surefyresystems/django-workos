@@ -166,5 +166,18 @@
     hideInput('id_password');
     submitOnEnter("id_password");
     submitOnEnter("id_username");
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const username = urlParams.get('username');
+    const start = urlParams.get('start') === 'true';
+
+    if(username){
+      setValue('id_username', username);
+    }
+
+    if(username && start){
+      next();
+    }
+
   </script>
 {% endblock %}

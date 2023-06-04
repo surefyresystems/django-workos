@@ -112,6 +112,10 @@ When logging in directly to your Django app you will be presented with a login s
 For all forms of login, if a `next` query parameter is provided the user will be redirected to that URL after authenticating.
 If `next` is not provided `LOGIN_REDIRECT_URL` setting will be used to determine where to redirect the user.
 
+If `username` query parameter is provided the username input will be prefilled.
+If `start` query parameter with value of `true` is provided in addition to username it will move the login to the second step. 
+This allows for an automatic redirect to an SSO login page if desired.
+
 Once a username is entered django-workos will determine which rule applies for this username.
 The next step depends on the rule that applies:
 #### Username / Password
