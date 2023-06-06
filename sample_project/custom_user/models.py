@@ -44,6 +44,9 @@ class Address(models.Model):
     primary = models.BooleanField(default=True, help_text="Is this the primary address for this account?")
     last_modified = models.DateTimeField(auto_now=True)
 
+class MeetingRoom(models.Model):
+    office_location = models.ForeignKey("OfficeLocation", on_delete=models.CASCADE, related_name="meeting_rooms")
+    name = models.CharField(max_length=100)
 
 class OfficeLocation(models.Model):
     addresses = GenericRelation(Address)

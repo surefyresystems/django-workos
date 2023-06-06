@@ -3,7 +3,7 @@ from django.test import TestCase
 from .models import OfficeLocation, User, Address
 from workos_login.exceptions import RelationDoesNotExist
 from workos_login.models import LoginRule, LoginMethods, JitMethods
-from workos_login.utils import jit_create_user
+from workos_login.utils import jit_create_user, update_user_profile
 
 
 # Create your tests here.
@@ -86,6 +86,14 @@ class SampleTests(TestCase):
                         "address1": "{{profile.raw_attributes.location.address}}",
                         "state": "CA"
                     }
+                ],
+                "meeting_rooms": [
+                    {
+                        "name": "room1"
+                    },
+                    {
+                        "name": "room2"
+                    }
                 ]
             }
         }
@@ -103,7 +111,7 @@ class SampleTests(TestCase):
         self.assertEqual(user.user_location.addresses.first().state, "CA")
         self.assertEqual(user.user_location.location_id, "123abc")
         self.assertEqual(user.user_location, ol)
-        self.assertEqual(user.user_location, ol)
+        self.assertEqual(set(user.user_location.meeting_rooms.values_list("name", flat=True)), {"room1", "room2"})
         self.assertEqual(User.objects.count(), 1)
 
         profile = {
@@ -129,3 +137,41 @@ class SampleTests(TestCase):
         self.assertEqual(user.user_location, ol)
         self.assertEqual(User.objects.count(), 2)
         self.assertEqual(Address.objects.count(), 1, "Since address did not change there should only be one")
+
+        update_user_profile(user, self.sso_rule, profile)
+        user = User.objects.get(pk=user.pk)
+
+        self.assertEqual(user.first_name, "Second")
+        self.assertEqual(user.user_location.addresses.first().address1, "fake addr")
+        self.assertEqual(user.user_location.addresses.first().state, "CA")
+        self.assertEqual(user.user_location.location_id, "123abc")
+        self.assertEqual(user.user_location, ol)
+        self.assertEqual(User.objects.count(), 2)
+        self.assertEqual(Address.objects.count(), 1, "Since address did not change there should only be one")
+
+
+        profile = {
+            "first_name": "Second",
+            "last_name": "Clause",
+            "email": "secondclause@northpole.net",
+            "id": "432",
+            "idp_id": "444",
+            "raw_attributes": {
+                "location": {
+                    "locId": "123abc",
+                    "address": "New Addr"
+                }
+            }
+        }
+
+        update_user_profile(user, self.sso_rule, profile)
+        user = User.objects.get(pk=user.pk)
+
+        self.assertEqual(user.first_name, "Second")
+        self.assertEqual(user.user_location.addresses.first().address1, "fake addr")
+        self.assertEqual(user.user_location.addresses.first().state, "CA")
+        self.assertEqual(user.user_location.location_id, "123abc")
+        self.assertEqual(user.user_location, ol)
+        self.assertEqual(OfficeLocation.objects.count(), 1)
+        self.assertEqual(User.objects.count(), 2)
+        self.assertEqual(Address.objects.count(), 2, "Since address did change it will create a new one")

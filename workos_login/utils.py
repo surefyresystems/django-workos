@@ -163,6 +163,53 @@ def _link_attributes(obj: models.Model, attributes: Optional[dict], profile: dic
 
         setattr(obj, field_name, related_instance)
 
+def _create_related_model(obj: models.Model, model_cls: models.Model, attributes: dict, profile: dict, commit: bool=True) -> models.Model:
+    """
+    Create a related model. This is used for related foreign keys or any related objects.
+
+    :param obj: The object that the related model is related to
+    :param model_cls: The class of the related model that will be created.
+    :param attributes: The attributes that should be set for the related model.
+    :param profile: Profile as provided by WorkOS
+    :param commit: Should the model be saved or just created and not yet saved.
+    :return: The model with the attributes set
+    """
+    related_obj_attrs = {k: v for k, v in attributes.items() if
+                         not (isinstance(v, dict) or isinstance(v, list))}
+    related_obj = model_cls()
+
+    for k,v in related_obj_attrs.items():
+        setattr(related_obj, k, render_attribute(v, profile, obj))
+
+    if commit:
+        related_obj.save()
+
+    return related_obj
+
+
+def _create_reverse_related_model(obj: models.Model, related_manager: models.Manager, attributes:dict, profile:dict) -> models.Model:
+    """
+    Create a reverse related model. This is either a reverse foreign key relation or a generic relation
+    using contenttypes framework.
+
+    :param obj: The object that the related model is related to
+    :param related_manager: The related manager which should be retrieved from the obj itself (ex. obj.my_fk_set).
+    :param attributes: The attributes that should be set for the related model.
+    :param profile: Profile as provided by WorkOS
+    :return: The model with the attributes set
+    """
+    related_object = _create_related_model(obj, related_manager.model, attributes, profile, commit=False)
+    if hasattr(related_manager, 'pk_val') and hasattr(related_manager, 'content_type'):
+        # This is a generic relation so the content type and id field need to be set.
+        setattr(related_object, related_manager.content_type_field_name,  related_manager.content_type)
+        setattr(related_object, related_manager.object_id_field_name,  related_manager.pk_val)
+    else:
+        # This is a reverse FK relationship, just set the field name to the instance
+        setattr(related_object, related_manager.field.name, related_manager.instance)
+    related_object.save()
+    return related_object
+
+
 def _update_attributes(obj: models.Model, attributes: Optional[dict], profile: dict, template_only: bool=False) -> None:
     """
     Update an object passed in with any attributes defined. The attributes can be a template to access profile data.
@@ -201,27 +248,28 @@ def _update_attributes(obj: models.Model, attributes: Optional[dict], profile: d
                 related_obj = getattr(obj, field_name)
                 if related_obj is None:
                     # Need to create object with the top level attributes
-                    related_obj_attrs = {k: render_attribute(v, profile, obj) for k,v in value.items() if not (isinstance(v, dict) or isinstance(v, list))}
-                    related_obj = field.related_model.objects.create(**related_obj_attrs)
+                    related_obj = _create_related_model(obj, field.related_model, value, profile)
                     setattr(obj, field_name, related_obj)
 
                 _update_attributes(getattr(obj, field_name), value, profile)
 
-        elif field.many_to_many or field.one_to_many:
+        elif field.one_to_many:
             if not isinstance(value, list):
-                raise ImproperConfigurationError("Many to many or reverse relations must be of type array")
+                raise ImproperConfigurationError("One to many relations must be of type array")
             for item in value:
                 related_obj_attrs = {k: render_attribute(v, profile, obj) for k, v in item.items() if not (isinstance(v, dict) or isinstance(v, list))}
 
                 related_manager = getattr(obj, field_name)
                 try:
-                    related_obj, created = related_manager.get_or_create(**related_obj_attrs)
+                    related_obj = related_manager.get(**related_obj_attrs)
+                    _update_attributes(related_obj, item, profile)
+                except ObjectDoesNotExist:
+                    related_obj = _create_reverse_related_model(obj, related_manager, item, profile)
+                    # Update in case there are more nested relations.
                     _update_attributes(related_obj, item, profile)
                 except MultipleObjectsReturned:
                     for related_obj in related_manager.filter(**related_obj_attrs):
                         _update_attributes(related_obj, item, profile)
-
-
 
     obj.save()
 
