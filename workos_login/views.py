@@ -152,7 +152,7 @@ class BaseCallbackView(RedirectView):
         error = self.request.GET.get("error")
         error_description = self.request.GET.get("error_description")
         if error:
-            return self.create_error([_("There was an logging in please try again."), _("%(error_code)s: %(error_message)s") % {"error_code": str(error), "error_message": str(error_description)}])
+            return self.create_error([_("There was an error logging in please try again."), _("%(error_code)s: %(error_message)s") % {"error_code": str(error), "error_message": str(error_description)}])
         user = None
         username = None
         if state:
