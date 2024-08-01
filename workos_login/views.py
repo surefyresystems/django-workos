@@ -439,15 +439,18 @@ class MFAVerificationView(MFAPermissionMixin, LoginSuccessUrlMixin, FormView):
         return initial
 
     def form_valid(self, form):
+        enrollment_factor = None
+        if SESSION_MFA_FACTOR_ID in self.request.session:
+            enrollment_factor = self.request.session[SESSION_MFA_FACTOR_ID]
+            del self.request.session[SESSION_MFA_FACTOR_ID]
+
         if not self.request.user.is_authenticated:
             # They could be enrolling/verifying while logged in - only log in if needed
             login_session_user(self.request)
 
-        if SESSION_MFA_FACTOR_ID in self.request.session:
-            # We are enrolling so we want to save the factor ID by sending signal to app
-            # Update factor id
-            mfa_enroll(self.request.user, self.request.session[SESSION_MFA_FACTOR_ID], mfa_type="sms")
-            del self.request.session[SESSION_MFA_FACTOR_ID]
+        if enrollment_factor:
+            # We are enrolling so we want to save the factor ID
+            mfa_enroll(self.request.user, enrollment_factor, mfa_type="sms")
             # user is already signed in for this case - no need for login
 
         return super(MFAVerificationView, self).form_valid(form)
