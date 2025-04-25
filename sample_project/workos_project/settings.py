@@ -57,11 +57,22 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = 'workos_project.urls'
 
+# Set below to 'mock' to test locally.
 # WORKOS_API_KEY = 'This can be set via env variable or here'
 # WORKOS_CLIENT_ID = 'This can be set via env variable or here'
 WORKOS_SEND_CUSTOM_EMAIL = True
 WORKOS_EMAIL_LOOKUP = False
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+# PING_CLIENT_ID = ""
+# PING_AUTHORIZATION_URL = ""
+# PING_TOKEN_URI = ""
+# PING_SCOPES = []
+# PING_CALLBACK_SCOPES = "openid%20profile%20uid%20email"
+# PING_USER_ENDPOINT = ""
+# PING_INTROSPECTION_URL = ""
+# PING_SA_CLIENT_ID = ""
+# PING_SA_PASSWORD = ""
 
 LOGIN_REDIRECT_URL = '/home/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'

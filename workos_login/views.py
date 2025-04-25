@@ -14,6 +14,7 @@ from django.contrib.auth import login as auth_login
 from django.utils.translation import gettext_lazy as _
 
 import workos
+from requests_oauthlib import OAuth2Session
 
 # Create your views here.
 from django.views.generic import FormView, RedirectView, TemplateView
@@ -146,6 +147,10 @@ class BaseCallbackView(RedirectView):
             user_login = None
         return user_login
 
+    def _get_profile(self, code, state):
+        profile = workos.client.sso.get_profile_and_token(code).to_dict()["profile"]
+        return profile
+
     def get_redirect_url(self, *args, **kwargs):
         code = self.request.GET.get("code")
         state = self.request.GET.get("state")
@@ -158,7 +163,7 @@ class BaseCallbackView(RedirectView):
         if state:
             state = unpack_state(state)
 
-        profile = workos.client.sso.get_profile_and_token(code).to_dict()["profile"]
+        profile = self._get_profile(code, state)
 
         user_login = self.find_user_login(profile)
 
@@ -290,6 +295,50 @@ class SSOCallbackView(BaseCallbackView):
         user_login.save()
 
 
+class PINGSSOCallbackView(SSOCallbackView):
+
+    def _get_profile(self, code, state):
+        redirect_uri = self.request.build_absolute_uri(reverse("PING_callback"))
+
+        session = OAuth2Session(
+            settings.PING_CLIENT_ID,
+            scope=settings.PING_SCOPES,
+            redirect_uri=redirect_uri,
+        )
+
+        token = session.fetch_token(
+            settings.PING_TOKEN_URI,
+            code=code,
+        )
+
+        introspection = session.post(
+            settings.PING_INTROSPECTION_URL,
+            data={
+                'token': token['access_token'],
+                'client_id': settings.PING_SA_CLIENT_ID,
+                'client_secret': settings.PING_SA_PASSWORD
+            },
+            headers={
+                "Content-Type": 'application/x-www-form-urlencoded',
+            },
+            ).json()
+
+        if not introspection["active"]:
+            self.create_error(_("User is not active."))
+
+        last_name, first_name = introspection["name"].split(", ")
+
+        profile = {
+            "email": introspection["username"],
+            "idp_id": introspection["userid"],
+            "first_name": first_name,
+            "last_name": last_name,
+            "id": ""
+        }
+
+        return profile
+
+
 class WorkosLoginView(LoginView):
     form_class = LoginForm
 
@@ -367,6 +416,10 @@ class WorkosLoginView(LoginView):
                 provider=LoginMethods(method).provider,
                 state=state,
             )
+            return redirect(authorization_url)
+        elif method == LoginMethods.PING:
+            redirect_uri = self.request.build_absolute_uri(reverse("PING_callback"))
+            authorization_url = f"{settings.PING_AUTHORIZATION_URL}?client_id={settings.PING_CLIENT_ID}&redirect_uri={redirect_uri}&response_type=code&scope={settings.PING_CALLBACK_SCOPES}&state={state}"
             return redirect(authorization_url)
 
         # Unknown method

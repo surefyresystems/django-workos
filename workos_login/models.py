@@ -66,10 +66,11 @@ class LoginMethods(models.TextChoices):
     MICROSOFT_SSO = conf.WORKOS_METHOD_MICROSOFT_OAUTH, "Microsoft SSO"
     SAML_SSO = conf.WORKOS_METHOD_SSO, "SAML SSO"
     USERNAME = conf.WORKOS_METHOD_EMAIL, "Username/Password"
+    PING = conf.WORKOS_METHOD_PING, "PING SSO"
 
     @property
     def is_sso(self):
-        return self == self.GOOGLE_SSO or self == self.MICROSOFT_SSO or self == self.SAML_SSO
+        return self == self.GOOGLE_SSO or self == self.MICROSOFT_SSO or self == self.SAML_SSO or self == self.PING
 
     @property
     def frontend_method(self):

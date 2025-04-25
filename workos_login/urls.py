@@ -4,7 +4,7 @@ from django.views.generic import TemplateView
 
 from .forms import WorkosPasswordResetForm, WorkosSetPasswordForm
 from .views import WorkosLoginView, get_login_method, MFAVerificationView, MFAEnrollSMSView, \
-    MFAEnrollTOTPView, MagicCallbackView, SSOCallbackView, MFAStartEnrollView
+    MFAEnrollTOTPView, MagicCallbackView, SSOCallbackView, MFAStartEnrollView, PINGSSOCallbackView
 from django.contrib.auth import views as auth_views
 
 urlpatterns = [
@@ -16,6 +16,7 @@ urlpatterns = [
          name="magic_link_confirmation"),
     path('login-method/', get_login_method, name="login_method"),
     path('callback/sso/', SSOCallbackView.as_view(), name="sso_callback"),
+    path('callback/PING/', PINGSSOCallbackView.as_view(), name="PING_callback"),
     path('callback/magic/', MagicCallbackView.as_view(), name="magic_callback"),
     path("login/", WorkosLoginView.as_view(), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),

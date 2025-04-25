@@ -44,6 +44,10 @@ class Settings:
     @property
     def WORKOS_METHOD_MFA(self) -> str:
         return "mfa"
+    
+    @property
+    def WORKOS_METHOD_PING(self) -> str:
+        return "PING"
 
     @property
     def WORKOS_METHOD_EMAIL_MFA(self) -> str:
@@ -93,6 +97,42 @@ class Settings:
     @property
     def WORKOS_ACTIVE_USER_FILTER(self) -> dict:
         return getattr(settings, 'WORKOS_ACTIVE_USER_FILTER', {"is_active": True})
+
+    @property
+    def PING_CLIENT_ID(self) -> str:
+        return getattr(settings, 'PING_CLIENT_ID', None)
+
+    @property
+    def PING_AUTHORIZATION_URL(self) -> str:
+        return getattr(settings, 'PING_AUTHORIZATION_URL', None)
+
+    @property
+    def PING_TOKEN_URI(self) -> str:
+        return getattr(settings, 'PING_TOKEN_URI', None)
+
+    @property
+    def PING_SCOPES(self) -> list:
+        return getattr(settings, 'PING_SCOPES', [])
+
+    @property
+    def PING_CALLBACK_SCOPES(self) -> str:
+        return getattr(settings, 'PING_CALLBACK_SCOPES', "openid%20profile%20uid%20email")
+
+    @property
+    def PING_USER_ENDPOINT(self) -> str:
+        return getattr(settings, 'PING_USER_ENDPOINT', None)
+
+    @property
+    def PING_INTROSPECTION_URL(self) -> str:
+        return getattr(settings, 'PING_INTROSPECTION_URL', None)
+
+    @property
+    def PING_SA_CLIENT_ID(self) -> str:
+        return getattr(settings, 'PING_SA_CLIENT_ID', None)
+
+    @property
+    def PING_SA_PASSWORD(self) -> str:
+        return getattr(settings, 'PING_SA_PASSWORD', None)
 
 
 conf = Settings()
