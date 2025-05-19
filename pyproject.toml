@@ -15,7 +15,8 @@ classifiers = [
     "Programming Language :: Python :: 3",
 ]
 dependencies = [
-    "workos==1.21"
+    "workos==1.21",
+    "requests_oauthlib==2.0.0"
 ]
 
 [project.urls]
