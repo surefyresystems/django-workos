@@ -112,15 +112,7 @@ class Settings:
 
     @property
     def PING_SCOPES(self) -> list:
-        return getattr(settings, 'PING_SCOPES', [])
-
-    @property
-    def PING_CALLBACK_SCOPES(self) -> str:
-        return getattr(settings, 'PING_CALLBACK_SCOPES', "openid%20profile%20uid%20email")
-
-    @property
-    def PING_USER_ENDPOINT(self) -> str:
-        return getattr(settings, 'PING_USER_ENDPOINT', None)
+        return getattr(settings, 'PING_SCOPES', ["openid", "profile", "email", "uid"])
 
     @property
     def PING_INTROSPECTION_URL(self) -> str:
