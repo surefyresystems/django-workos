@@ -1,4 +1,5 @@
 from typing import Optional
+from urllib import parse
 
 from django.contrib import messages
 from django.contrib.auth.mixins import UserPassesTestMixin
@@ -299,10 +300,10 @@ class SSOCallbackView(BaseCallbackView):
         user_login.save()
 
 
-class PINGSSOCallbackView(SSOCallbackView):
+class PingSSOCallbackView(SSOCallbackView):
 
-    def _get_profile(self, code, state, rule):
-        redirect_uri = self.request.build_absolute_uri(reverse("PING_callback"))
+    def _get_profile(self, code, state):
+        redirect_uri = self.request.build_absolute_uri(reverse("ping_callback"))
 
         session = OAuth2Session(
             settings.PING_CLIENT_ID,
@@ -315,7 +316,10 @@ class PINGSSOCallbackView(SSOCallbackView):
             code=code,
         )
 
-        introspection = session.post(
+        if not token:
+            self.create_error(_("Unable to get token from Ping. Please try again."))
+
+        res = session.post(
             settings.PING_INTROSPECTION_URL,
             data={
                 'token': token['access_token'],
@@ -325,7 +329,12 @@ class PINGSSOCallbackView(SSOCallbackView):
             headers={
                 "Content-Type": 'application/x-www-form-urlencoded',
             },
-            ).json()
+            )
+
+        if res.status_code != 200:
+            self.create_error(_("Unable to get user profile from Ping. Please try again."))
+
+        introspection = res.json()
 
         if not introspection["active"]:
             self.create_error(_("User is not active."))
@@ -337,7 +346,11 @@ class PINGSSOCallbackView(SSOCallbackView):
             "idp_id": introspection["userid"],
             "first_name": first_name,
             "last_name": last_name,
-            "id": ""
+            "id": introspection["userid"],
+            "raw_attributes": introspection,
+            "organization_id": None,
+            "connection_id": None,
+            "connection_type": None
         }
 
         return profile
@@ -423,8 +436,15 @@ class WorkosLoginView(LoginView):
             )
             return redirect(authorization_url)
         elif method == LoginMethods.PING:
-            redirect_uri = self.request.build_absolute_uri(reverse("PING_callback"))
-            authorization_url = f"{settings.PING_AUTHORIZATION_URL}?client_id={settings.PING_CLIENT_ID}&redirect_uri={redirect_uri}&response_type=code&scope={settings.PING_CALLBACK_SCOPES}&state={state}"
+            redirect_uri = self.request.build_absolute_uri(reverse("ping_callback"))
+            params = {
+                "client_id": settings.PING_CLIENT_ID,
+                "redirect_uri": redirect_uri,
+                "response_type": "code",
+                "scope": " ".join(settings.PING_SCOPES),
+                "state": state
+            }
+            authorization_url = f"{settings.PING_AUTHORIZATION_URL}?{parse.urlencode(params)}"
             return redirect(authorization_url)
 
         # Unknown method
