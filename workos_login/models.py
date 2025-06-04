@@ -1,5 +1,6 @@
 from enum import Enum
 from typing import Optional
+import workos
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -92,6 +93,10 @@ class JitMethods(models.TextChoices):
     ATTRIBUTES_MATCH = "attributes", "Matching Attributes"
     IDP = "idp", "Matching Attributes or IdP login"
 
+class EnvironmentChoices(models.TextChoices):
+    PRODUCTION = "production", "Production"
+    SANDBOX = "sandbox", "Sandbox"
+
 class LoginRule(models.Model):
     name = models.CharField(max_length=255, help_text=_("Name for this config"), unique=True)
     lookup_attributes = models.JSONField(blank=True, null=True)
@@ -116,6 +121,10 @@ class LoginRule(models.Model):
     saved_attributes = models.JSONField(blank=True, default=dict,
                                         help_text=_("Attributes to set on user instance when creating user. This is a Django template string that supports lookups like "
                                                     "{{profile.raw_attributes['some-extended-attribute']}}. <a target='_blank' href='https://workos.com/docs/reference/sso/profile'>Profile</a> is defined by WorkOS"))
+
+    environment = models.CharField(blank=True, default=EnvironmentChoices.PRODUCTION, choices=EnvironmentChoices.choices, max_length=10,
+                                        help_text=_("Which environment should this login rule connect to"))
+
     objects = WorkosQuerySet.as_manager()
 
     class Meta:

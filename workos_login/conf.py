@@ -16,6 +16,14 @@ class Settings:
         return getattr(settings, "WORKOS_API_KEY", None)
 
     @property
+    def WORKOS_SANDBOX_CLIENT_ID(self) -> str:
+        return getattr(settings, "WORKOS_SANDBOX_CLIENT_ID", None)
+
+    @property
+    def WORKOS_SANDBOX_API_KEY(self) -> str:
+        return getattr(settings, "WORKOS_SANDBOX_API_KEY", None)
+
+    @property
     def WORKOS_EMAIL_LOOKUP(self) -> bool:
         """Lookup based on email address - the application must enforce lowercase unique emails if this is True"""
         return getattr(settings, "WORKOS_EMAIL_LOOKUP", False)

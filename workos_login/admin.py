@@ -1,11 +1,12 @@
 from django.utils.html import format_html
 from workos.exceptions import BadRequestException
 from django.utils.translation import gettext_lazy as _
-
+import copy
 from workos_login.models import LoginRule, UserLogin
 
 from django.contrib import admin
 from workos import client as workos_client
+from workos_login.utils import has_sandbox_credentials
 
 
 class LoginRuleAdmin(admin.ModelAdmin):
@@ -26,6 +27,15 @@ class LoginRuleAdmin(admin.ModelAdmin):
             'fields': ('totp_organization_name',)
         }),
     )
+
+    def get_fieldsets(self, *args, **kwargs):
+        fieldset = super().get_fieldsets(*args, **kwargs)
+        # If there are no sandbox credentials - leave the default of production only
+        if has_sandbox_credentials():
+            ret = copy.deepcopy(fieldset)
+            ret[0][1]["fields"] += ("environment",)
+            return ret
+        return fieldset
 
     @admin.display(
         description='Portal Link',

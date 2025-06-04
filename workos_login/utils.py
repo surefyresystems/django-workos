@@ -323,9 +323,6 @@ def pack_state(state_dict: dict) -> str:
     state = signing.dumps(state_dict, compress=True)
     return json.dumps({"_": state, **conf.WORKOS_EXTRA_STATE})
 
-def get_client(rule) -> WorkOSClient:
-    return WorkOSClient(api_key=conf.WORKOS_API_KEY, client_id=conf.WORKOS_CLIENT_ID)
-
 
 def unpack_state(state_str: str) -> dict:
     """
@@ -334,3 +331,20 @@ def unpack_state(state_str: str) -> dict:
     """
     state = json.loads(state_str)
     return signing.loads(state["_"])
+
+def has_sandbox_credentials() -> bool:
+    """
+    Check if there are more than one set of credentials.
+    """
+    return conf.WORKOS_SANDBOX_CLIENT_ID and conf.WORKOS_SANDBOX_API_KEY
+
+def get_client(rule) -> WorkOSClient:
+    if not has_sandbox_credentials() or rule is None:
+        # No sandbox credentials - just use the defaults that were set originally
+        return WorkOSClient(api_key=conf.WORKOS_API_KEY, client_id=conf.WORKOS_CLIENT_ID)
+
+    from workos_login.models import EnvironmentChoices
+    if rule.environment == EnvironmentChoices.PRODUCTION:
+        return WorkOSClient(api_key=conf.WORKOS_API_KEY, client_id=conf.WORKOS_CLIENT_ID)
+    else:
+        return WorkOSClient(api_key=conf.WORKOS_SANDBOX_API_KEY, client_id=conf.WORKOS_SANDBOX_CLIENT_ID)
