@@ -421,8 +421,8 @@ class WorkosLoginView(LoginView):
         elif method == LoginMethods.SAML_SSO:
             uri = conf.WORKOS_SSO_REDIRECT_URI if conf.WORKOS_SSO_REDIRECT_URI else self.request.build_absolute_uri(reverse("sso_callback"))
             authorization_url = client.sso.get_authorization_url(
-                connection=rule.connection_id if rule.connection_id else None,
-                organization=rule.organization_id if rule.organization_id else None,
+                connection_id=rule.connection_id if rule.connection_id else None,
+                organization_id=rule.organization_id if rule.organization_id else None,
                 redirect_uri=uri,
                 state=state,
             )
