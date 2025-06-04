@@ -94,10 +94,14 @@ class MFAVerificationForm(BootstrapMixin, forms.Form):
     code = forms.CharField(required=True, widget=forms.TextInput(attrs={"autofocus": True}))
     challenge_id = forms.CharField(widget=forms.HiddenInput(), required=True)
 
+    def __init__(self, *args, **kwargs):
+        self.client = kwargs.pop("workos_client", None)
+        super().__init__(*args, **kwargs)
+
     def clean(self):
         challenge_id = self.cleaned_data["challenge_id"]
         challenge_code = self.cleaned_data["code"]
-        if not verify_challenge(challenge_id, challenge_code):
+        if not verify_challenge(challenge_id, challenge_code, self.client):
             self.add_error("code", ValidationError(_("Verification failed - please try again"), code="invalid_code"))
 
         return self.cleaned_data
@@ -110,11 +114,12 @@ class MFAEnrollFormSMS(BootstrapMixin, forms.Form):
 
     def __init__(self, *args, **kwargs):
         self.response_id = None
+        self.client = kwargs.pop("workos_client", None)
         super(MFAEnrollFormSMS, self).__init__(*args, **kwargs)
         
     def clean_phone_number(self):
         try:
-            response = workos.client.mfa.enroll_factor(type=conf.MFA_SMS_TYPE, phone_number=self.cleaned_data["phone_number"])
+            response = self.client.mfa.enroll_factor(type=conf.MFA_SMS_TYPE, phone_number=self.cleaned_data["phone_number"]).dict()
         except BadRequestException as e:
             try:
                 message = e.message
@@ -136,8 +141,12 @@ class MFAEnrollFormTOTP(BootstrapMixin, forms.Form):
     factor_id = forms.CharField(required=True, widget=forms.HiddenInput())
     code = forms.CharField(required=True, widget=forms.TextInput(attrs={"autofocus": True}))
 
+    def __init__(self, *args, **kwargs):
+        self.client = kwargs.pop("workos_client", None)
+        super().__init__(*args, **kwargs)
+
     def clean(self):
-        if not totp_verify_code(self.cleaned_data["factor_id"], self.cleaned_data["code"]):
+        if not totp_verify_code(self.cleaned_data["factor_id"], self.cleaned_data["code"], client=self.client):
             self.add_error("code", ValidationError(_("Verification failed - please try again")))
 
     def complete_enrollment(self, user):

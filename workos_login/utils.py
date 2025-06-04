@@ -1,6 +1,6 @@
 import json
 from typing import Optional, Any
-
+from workos import WorkOSClient
 from django.contrib.auth import get_user_model
 from django.core import signing
 from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned, FieldDoesNotExist
@@ -81,12 +81,12 @@ def has_user_login_model(user: models.Model) -> bool:
     return UserLogin.objects.filter(user=user).exists()
 
 
-def totp_verify_code(factor_id: str, code: str) -> bool:
-    challenge_id = workos.client.mfa.challenge_factor(authentication_factor_id=factor_id).get("id")
-    return verify_challenge(challenge_id, code)
+def totp_verify_code(factor_id: str, code: str, client: WorkOSClient) -> bool:
+    challenge_id = client.mfa.challenge_factor(authentication_factor_id=factor_id).dict().get("id")
+    return verify_challenge(challenge_id, code, client)
 
 
-def verify_challenge(challenge_id: str, code: str) -> bool:
+def verify_challenge(challenge_id: str, code: str, client: WorkOSClient) -> bool:
     """
     Given a challenge ID verify that it is correct
     :param challenge_id: challenge id to verify
@@ -94,7 +94,7 @@ def verify_challenge(challenge_id: str, code: str) -> bool:
     :return: True if valid, False otherwise
     """
     try:
-        response = workos.client.mfa.verify_challenge(authentication_challenge_id=challenge_id, code=code)
+        response = client.mfa.verify_challenge(authentication_challenge_id=challenge_id, code=code).dict()
     except BadRequestException as e:
         return False
 
@@ -322,6 +322,9 @@ def pack_state(state_dict: dict) -> str:
     """
     state = signing.dumps(state_dict, compress=True)
     return json.dumps({"_": state, **conf.WORKOS_EXTRA_STATE})
+
+def get_client(rule) -> WorkOSClient:
+    return WorkOSClient(api_key=conf.WORKOS_API_KEY, client_id=conf.WORKOS_CLIENT_ID)
 
 
 def unpack_state(state_str: str) -> dict:

@@ -24,7 +24,7 @@ from workos_login.models import LoginRule, UserLogin, LoginMethods
 from workos_login.conf import conf
 from workos_login.signals import workos_user_created, workos_send_magic_link
 from workos_login.utils import user_has_mfa_enabled, get_user_login_model, mfa_enroll, jit_create_user, \
-    pack_state, unpack_state, update_user_profile, find_user_by_email, get_users, has_user_login_model, find_user
+    pack_state, unpack_state, update_user_profile, find_user_by_email, get_users, has_user_login_model, find_user, get_client
 
 SESSION_AUTHENTICATED_USER_ID = "workos_auth_user_id"  # Stores the authenticated user id (used by MFA)
 SESSION_USER_ID = "workos_user_id"  # Store the user ID in SSO state.
@@ -147,8 +147,9 @@ class BaseCallbackView(RedirectView):
             user_login = None
         return user_login
 
-    def _get_profile(self, code, state):
-        profile = workos.client.sso.get_profile_and_token(code).to_dict()["profile"]
+    def _get_profile(self, code, state, rule):
+        client = get_client(rule)
+        profile = client.sso.get_profile_and_token(code).dict()["profile"]
         return profile
 
     def get_redirect_url(self, *args, **kwargs):
@@ -160,10 +161,13 @@ class BaseCallbackView(RedirectView):
             return self.create_error([_("There was an error logging in please try again."), _("%(error_code)s: %(error_message)s") % {"error_code": str(error), "error_message": str(error_description)}])
         user = None
         username = None
+        rule = None
         if state:
             state = unpack_state(state)
+            rule_id = state[SESSION_RULE_ID]
+            rule = LoginRule.objects.get(pk=rule_id)
 
-        profile = self._get_profile(code, state)
+        profile = self._get_profile(code, state, rule)
 
         user_login = self.find_user_login(profile)
 
@@ -297,7 +301,7 @@ class SSOCallbackView(BaseCallbackView):
 
 class PINGSSOCallbackView(SSOCallbackView):
 
-    def _get_profile(self, code, state):
+    def _get_profile(self, code, state, rule):
         redirect_uri = self.request.build_absolute_uri(reverse("PING_callback"))
 
         session = OAuth2Session(
@@ -366,6 +370,7 @@ class WorkosLoginView(LoginView):
 
         user = form.get_user()
         rule = form.get_rule()
+        client = get_client(rule)
         method = rule.method
         state = pack_state({
             SESSION_RULE_ID: rule.pk,
@@ -391,18 +396,18 @@ class WorkosLoginView(LoginView):
         elif method == LoginMethods.MAGIC_LINK or method == LoginMethods.EMAIL_MFA:
             email = user.email
             uri = conf.WORKOS_MAGIC_REDIRECT_URI if conf.WORKOS_MAGIC_REDIRECT_URI else self.request.build_absolute_uri(reverse("magic_callback"))
-            session = workos.client.passwordless.create_session({
-                'email': email,
-                'redirect_uri': uri,
-                'state': state,
-                'type': 'MagicLink'})
+            session = client.passwordless.create_session(
+                email=email,
+                redirect_uri=uri,
+                state=state,
+                type='MagicLink').dict()
             workos_send_magic_link.send(sender=LoginRule, user=user, link=session["link"], rule=rule)
             if not conf.WORKOS_SEND_CUSTOM_EMAIL:
-                workos.client.passwordless.send_session(session['id'])
+                client.passwordless.send_session(session['id'])
             return redirect('magic_link_confirmation')
         elif method == LoginMethods.SAML_SSO:
             uri = conf.WORKOS_SSO_REDIRECT_URI if conf.WORKOS_SSO_REDIRECT_URI else self.request.build_absolute_uri(reverse("sso_callback"))
-            authorization_url = workos.client.sso.get_authorization_url(
+            authorization_url = client.sso.get_authorization_url(
                 connection=rule.connection_id if rule.connection_id else None,
                 organization=rule.organization_id if rule.organization_id else None,
                 redirect_uri=uri,
@@ -411,7 +416,7 @@ class WorkosLoginView(LoginView):
             return redirect(authorization_url)
         elif method in {LoginMethods.MICROSOFT_SSO, LoginMethods.GOOGLE_SSO}:
             uri = conf.WORKOS_SSO_REDIRECT_URI if conf.WORKOS_SSO_REDIRECT_URI else self.request.build_absolute_uri(reverse("sso_callback"))
-            authorization_url = workos.client.sso.get_authorization_url(
+            authorization_url = client.sso.get_authorization_url(
                 redirect_uri=uri,
                 provider=LoginMethods(method).provider,
                 state=state,
@@ -449,6 +454,11 @@ class MFAVerificationView(MFAPermissionMixin, LoginSuccessUrlMixin, FormView):
     form_class = MFAVerificationForm
     template_name = 'registration/mfa_verify.html'
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["workos_client"] = get_client(get_session_rule(self.request))
+        return kwargs
+
     def get_factor_id(self):
 
         if SESSION_MFA_FACTOR_ID in self.request.session:
@@ -474,7 +484,8 @@ class MFAVerificationView(MFAPermissionMixin, LoginSuccessUrlMixin, FormView):
         message = conf.WORKOS_SMS_MFA_TEMPLATE
         if callable(message):
             message = message(get_session_user(self.request))
-        self.workos_response = workos.client.mfa.challenge_factor(authentication_factor_id=self.get_factor_id(), sms_template=message)
+        client = get_client(get_session_rule(self.request))
+        self.workos_response = client.mfa.challenge_factor(authentication_factor_id=self.get_factor_id(), sms_template=message).dict()
         return super(MFAVerificationView, self).get(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
@@ -516,6 +527,11 @@ class MFAStartEnrollView(MFAPermissionMixin, TemplateView):
 class MFAEnrollBaseView(MFAPermissionMixin, FormView):
     template_name = 'registration/mfa_enroll.html'
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["workos_client"] = get_client(get_session_rule(self.request))
+        return kwargs
+
     def get_success_url(self):
         return reverse('mfa_verify')
 
@@ -537,19 +553,25 @@ class MFAEnrollTOTPView(LoginSuccessUrlMixin, FormView):
     template_name = 'registration/mfa_enroll.html'
     form_class = MFAEnrollFormTOTP
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["workos_client"] = get_client(get_session_rule(self.request))
+        return kwargs
+
     def __init__(self, *args, **kwargs):
         super(MFAEnrollTOTPView, self).__init__(*args, **kwargs)
 
     def get(self, request, *args, **kwargs):
         user = get_session_user(request)
         rule = get_session_rule(request)
+        client = get_client(rule)
         if not user or not rule:
             messages.error(request, _("Unauthorized - try again"))
             return redirect("login")
         if SESSION_TOTP_QR_CODE not in self.request.session:
-            workos_response = workos.client.mfa.enroll_factor(type=conf.MFA_TOTP_TYPE,
+            workos_response = client.mfa.enroll_factor(type=conf.MFA_TOTP_TYPE,
                                                                    totp_issuer=rule.totp_organization_name,
-                                                                   totp_user=user.email)
+                                                                   totp_user=user.email).dict()
             self.request.session[SESSION_TOTP_QR_CODE] = workos_response["totp"]["qr_code"]
             self.request.session[SESSION_TOTP_SECRET] = workos_response["totp"]["secret"]
             self.request.session[SESSION_MFA_FACTOR_ID] = workos_response["id"]

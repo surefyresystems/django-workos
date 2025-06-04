@@ -23,10 +23,6 @@ class WorkosConfig(AppConfig):
     def ready(self):
         import workos
         # If settings do not exist they must be set in env variables
-        if(conf.WORKOS_CLIENT_ID):
-            workos.client_id = conf.WORKOS_CLIENT_ID
-        if(conf.WORKOS_API_KEY):
-            workos.api_key = conf.WORKOS_API_KEY
 
         register(check_settings, Tags.compatibility)
 

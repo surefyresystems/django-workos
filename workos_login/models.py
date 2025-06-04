@@ -6,7 +6,6 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django import forms
 from django.utils.translation import gettext_lazy as _
-from workos.utils.connection_types import ConnectionType
 
 from workos_login.conf import conf
 import re
@@ -83,9 +82,9 @@ class LoginMethods(models.TextChoices):
     @property
     def provider(self):
         if self == self.GOOGLE_SSO:
-            return ConnectionType.GoogleOAuth
+            return "GoogleOAuth"
         if self == self.MICROSOFT_SSO:
-            return ConnectionType.MicrosoftOAuth
+            return "MicrosoftOAuth"
         return None
 
 
