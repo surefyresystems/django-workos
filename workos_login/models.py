@@ -229,7 +229,7 @@ class LoginRule(models.Model):
 
     def format_username(self, profile: dict) -> str:
         if "username" in self.saved_attributes:
-            return render_attribute(self.saved_attributes["username"], profile)
+            return render_attribute(self.saved_attributes["username"], profile, None)
 
         if conf.WORKOS_JIT_USERNAME == "email":
             return profile["email"]

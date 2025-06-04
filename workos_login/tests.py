@@ -12,14 +12,12 @@ import workos
 
 from workos_login.utils import jit_create_user
 
-workos.api_key = "mock"
-workos.client_id = "mock"
 
 
 @dataclass
 class MockProfile:
     profile: dict
-    def to_dict(self):
+    def dict(self):
         return self.profile
 
 def get_profile_and_token(code, **profile_attrs):
@@ -85,7 +83,7 @@ class LoginRuleTest(TestCase):
         rule = LoginRule.objects.find_rule_for_username("test")
         self.assertEqual(rule, priority_two)
 
-    @patch('workos.client.sso.get_profile_and_token', wraps=partial(get_profile_and_token, organization_id="sso_org", id="1234"), org_id="org_id")
+    @patch('workos.sso.SSO.get_profile_and_token', wraps=partial(get_profile_and_token, organization_id="sso_org", idp_id="1234"), org_id="org_id")
     def test_idp_lookup(self, mock_get_profile):
         """
         Test that idp will find a user correctly using SSO callback
@@ -124,7 +122,7 @@ class LoginRuleTest(TestCase):
         sso_rule = LoginRule.objects.create(
             name="JIT Creation",
             method=LoginMethods.SAML_SSO,
-            jit_creation=True,
+            jit_creation_type="idp",
             priority=3,
             saved_attributes={
                 "username": "{{profile.first_name}}{{profile.last_name}}"
