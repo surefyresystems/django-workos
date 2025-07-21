@@ -302,7 +302,8 @@ class SSOCallbackView(BaseCallbackView):
 
 class PingSSOCallbackView(SSOCallbackView):
 
-    def _get_profile(self, code, state):
+    def _get_profile(self, code, state, rule):
+        # Note that rule does not apply here as we do not use WorkOS for Ping SSO
         redirect_uri = self.request.build_absolute_uri(reverse("ping_callback"))
 
         session = OAuth2Session(
