@@ -340,7 +340,8 @@ class PingSSOCallbackView(SSOCallbackView):
         token = session.fetch_token(
             settings.PING_TOKEN_URI,
             code=code,
-            code_verifier=code_verifier
+            code_verifier=code_verifier,
+            client_secret=None,  # Explicitly set here so we don't accidentally send it.
         )
 
         # Clean up the code verifier from session after use
