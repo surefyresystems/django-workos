@@ -1,5 +1,8 @@
 from typing import Optional
 from urllib import parse
+import hashlib
+import base64
+import secrets
 
 from django.contrib import messages
 from django.contrib.auth.mixins import UserPassesTestMixin
@@ -37,6 +40,19 @@ SESSION_NEXT = "workos_next"
 SESSION_MFA_FACTOR_ID = "workos_mfa_factor_id"  # Used during MFA enrollment to store the factor ID
 SESSION_TOTP_QR_CODE = "workos_totp_qr_code"  # QR Code used for enrollment
 SESSION_TOTP_SECRET = "workos_totp_secret"  # Secret that matches the above QR code
+SESSION_PING_CODE_VERIFIER = "ping_code_verifier"  # PKCE code verifier for PING OAuth
+
+
+def generate_pkce_challenge():
+    """Generate PKCE code verifier and challenge for OAuth2 PKCE flow."""
+    # Generate a code verifier (43-128 characters, URL-safe string)
+    code_verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode('utf-8').rstrip('=')
+    
+    # Generate code challenge (SHA256 hash of verifier, base64 URL-safe encoded)
+    challenge = hashlib.sha256(code_verifier.encode('utf-8')).digest()
+    code_challenge = base64.urlsafe_b64encode(challenge).decode('utf-8').rstrip('=')
+    
+    return code_verifier, code_challenge
 
 
 def clear_session_vars(request: HttpRequest) -> None:
@@ -60,6 +76,9 @@ def clear_session_vars(request: HttpRequest) -> None:
 
     if SESSION_TOTP_SECRET in request.session:
         del request.session[SESSION_TOTP_SECRET]
+
+    if SESSION_PING_CODE_VERIFIER in request.session:
+        del request.session[SESSION_PING_CODE_VERIFIER]
 
 
 class UserNotFound(Exception):
@@ -305,6 +324,11 @@ class PingSSOCallbackView(SSOCallbackView):
     def _get_profile(self, code, state, rule):
         # Note that rule does not apply here as we do not use WorkOS for Ping SSO
         redirect_uri = self.request.build_absolute_uri(reverse("ping_callback"))
+        
+        # Get the code verifier from session (stored during authorization)
+        code_verifier = self.request.session.get(SESSION_PING_CODE_VERIFIER)
+        if not code_verifier:
+            return self.create_error(_("PKCE code verifier not found. Please try again."))
 
         session = OAuth2Session(
             settings.PING_CLIENT_ID,
@@ -312,13 +336,19 @@ class PingSSOCallbackView(SSOCallbackView):
             redirect_uri=redirect_uri,
         )
 
+        # Include code_verifier for PKCE
         token = session.fetch_token(
             settings.PING_TOKEN_URI,
             code=code,
+            code_verifier=code_verifier
         )
 
+        # Clean up the code verifier from session after use
+        if SESSION_PING_CODE_VERIFIER in self.request.session:
+            del self.request.session[SESSION_PING_CODE_VERIFIER]
+
         if not token:
-            self.create_error(_("Unable to get token from Ping. Please try again."))
+            return self.create_error(_("Unable to get token from Ping. Please try again."))
 
         res = session.post(
             settings.PING_INTROSPECTION_URL,
@@ -438,12 +468,21 @@ class WorkosLoginView(LoginView):
             return redirect(authorization_url)
         elif method == LoginMethods.PING:
             redirect_uri = self.request.build_absolute_uri(reverse("ping_callback"))
+            
+            # Generate PKCE challenge
+            code_verifier, code_challenge = generate_pkce_challenge()
+            
+            # Store code verifier in session for callback
+            self.request.session[SESSION_PING_CODE_VERIFIER] = code_verifier
+            
             params = {
                 "client_id": settings.PING_CLIENT_ID,
                 "redirect_uri": redirect_uri,
                 "response_type": "code",
                 "scope": " ".join(settings.PING_SCOPES),
-                "state": state
+                "state": state,
+                "code_challenge": code_challenge,
+                "code_challenge_method": "S256"
             }
             authorization_url = f"{settings.PING_AUTHORIZATION_URL}?{parse.urlencode(params)}"
             return redirect(authorization_url)
