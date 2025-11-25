@@ -26,7 +26,8 @@ from django.views.generic import FormView, RedirectView, TemplateView
 from workos_login.forms import LoginForm, MFAVerificationForm, MFAEnrollFormSMS, MFAEnrollFormTOTP
 from workos_login.models import LoginRule, UserLogin, LoginMethods
 from workos_login.conf import conf
-from workos_login.signals import workos_user_created, workos_send_magic_link
+from workos_login.signals import workos_user_created, workos_send_magic_link, \
+    workos_ping_login
 from workos_login.utils import user_has_mfa_enabled, get_user_login_model, mfa_enroll, jit_create_user, \
     pack_state, unpack_state, update_user_profile, find_user_by_email, get_users, has_user_login_model, find_user, get_client
 
@@ -386,6 +387,20 @@ class PingSSOCallbackView(SSOCallbackView):
         }
 
         return profile
+
+    def update_user_login(
+            self, user_login: UserLogin, workos_profile: dict) -> None:
+        # Call parent method to handle standard user login updates
+        super().update_user_login(user_login, workos_profile)
+
+        # Send PING login signal for profile checking
+        workos_ping_login.send(
+            sender=self.__class__,
+            user=user_login.user,
+            profile=workos_profile,
+            rule=user_login.rule,
+            request=self.request
+        )
 
 
 class WorkosLoginView(LoginView):
