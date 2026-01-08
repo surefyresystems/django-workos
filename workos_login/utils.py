@@ -310,6 +310,7 @@ def update_user_profile(user: models.Model, rule: Optional[models.Model], profil
         user.first_name = profile["first_name"]
         user.last_name = profile["last_name"]
         user.email = profile["email"]
+        user.save()
         _update_attributes(user, rule.saved_attributes, profile, template_only=True)
 
 
