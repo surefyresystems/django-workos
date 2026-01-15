@@ -30,6 +30,8 @@ from workos_login.signals import workos_user_created, workos_send_magic_link
 from workos_login.utils import user_has_mfa_enabled, get_user_login_model, mfa_enroll, jit_create_user, \
     pack_state, unpack_state, update_user_profile, find_user_by_email, get_users, has_user_login_model, find_user, get_client
 
+from workos.exceptions import BadRequestException
+
 SESSION_AUTHENTICATED_USER_ID = "workos_auth_user_id"  # Stores the authenticated user id (used by MFA)
 SESSION_USER_ID = "workos_user_id"  # Store the user ID in SSO state.
 STATE_USERNAME = "workos_username"  # Username entered - used to verify the SSO is the same name.
@@ -168,8 +170,13 @@ class BaseCallbackView(RedirectView):
         return user_login
 
     def _get_profile(self, code, state, rule):
-        client = get_client(rule)
-        profile = client.sso.get_profile_and_token(code).dict()["profile"]
+        try:
+            client = get_client(rule)
+            profile = client.sso.get_profile_and_token(code).dict()["profile"]
+        except BadRequestException:
+            client = get_client(rule, force_sandbox=True)
+            profile = client.sso.get_profile_and_token(code).dict()["profile"]
+
         return profile
 
     def get_redirect_url(self, *args, **kwargs):

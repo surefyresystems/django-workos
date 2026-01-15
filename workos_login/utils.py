@@ -338,9 +338,13 @@ def has_sandbox_credentials() -> bool:
     """
     return conf.WORKOS_SANDBOX_CLIENT_ID and conf.WORKOS_SANDBOX_API_KEY
 
-def get_client(rule) -> WorkOSClient:
-    if not has_sandbox_credentials() or rule is None:
+def get_client(rule, force_sandbox=False) -> WorkOSClient:
+    if not has_sandbox_credentials():
         # No sandbox credentials - just use the defaults that were set originally
+        return WorkOSClient(api_key=conf.WORKOS_API_KEY, client_id=conf.WORKOS_CLIENT_ID)
+    if rule is None:
+        if force_sandbox:
+            return WorkOSClient(api_key=conf.WORKOS_SANDBOX_API_KEY, client_id=conf.WORKOS_SANDBOX_CLIENT_ID)
         return WorkOSClient(api_key=conf.WORKOS_API_KEY, client_id=conf.WORKOS_CLIENT_ID)
 
     from workos_login.models import EnvironmentChoices
