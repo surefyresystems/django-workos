@@ -177,12 +177,19 @@ For instance, if organization name was sent as SAML attribute from your IdP you 
 ```json
 {
   "is_staff": true,
+  "groups": "##profile.raw_attributes.group_id_list",
   "profile": {
     "organization_name": "{{profile.raw_attributes.organization_name}}"
   }
 }
 ```
 The only context provided is `profile` which is a dictionary of items coming from [WorkOS Profile](https://workos.com/docs/reference/sso/profile).
+
+In addition to using a standard template you can start strings with "##profile" which will be converted to the raw type.
+In the above example if there was a `group_id_list` had a value of [1, 2] it would be equivelent to: `user.groups.set([1, 2])`.
+This will correctly set the users groups to the two groups that have IDs 1, 2.
+If instead it was `"groups": "{{profile.raw_attributes.group_id_list}}"` it would be equivalent to: `user.groups.set("[1, 2]")` which would fail.
+
 #### Auto Update
 If `WORKOS_AUTO_UPDATE` is set to `True` all template attributes will be re-evaluated at each login and will be updated.
 So in the above example if the SAML organization name changes the user profile would get automatically updated.

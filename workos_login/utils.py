@@ -129,6 +129,18 @@ def render_attribute(value: Any, profile: dict, object: models.Model) -> Any:
         for k, v in value.items():
             value[k] = render_attribute(v, profile, object)
     if isinstance(value, str):
+        # Check for direct profile access syntax: ##profile.key
+        if value.startswith("##profile."):
+            attr_name = value.replace("##profile.", "")
+            # Support nested keys like "##profile.address.city"
+            keys = attr_name.split(".")
+            result = profile
+            for key in keys:
+                if isinstance(result, dict):
+                    result = result.get(key)
+                else:
+                    return value  # Return original if path is invalid
+            return result
         t = Template(value)
         c = Context({"profile": profile, "object": object})
         return t.render(c)
@@ -270,6 +282,18 @@ def _update_attributes(obj: models.Model, attributes: Optional[dict], profile: d
                 except MultipleObjectsReturned:
                     for related_obj in related_manager.filter(**related_obj_attrs):
                         _update_attributes(related_obj, item, profile)
+        elif field.many_to_many:
+            related_manager = getattr(obj, field_name)
+            if isinstance(value, str):
+                value = render_attribute(value, profile, obj)
+                if not isinstance(value, list):
+                    raise ImproperConfigurationError("Many to many templates must render to a list")
+            elif isinstance(value, list):
+                value = [render_attribute(item, profile, obj) for item in value]
+            else:
+                raise ImproperConfigurationError("Many to many objects must be a list or template that renders to a list")
+            # Many-to-many always will set the values
+            related_manager.set(value)
 
     obj.save()
 

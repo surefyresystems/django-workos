@@ -1,6 +1,7 @@
 from django.test import TestCase
 
 from .models import OfficeLocation, User, Address
+from django.contrib.auth.models import Group
 from workos_login.exceptions import RelationDoesNotExist
 from workos_login.models import LoginRule, LoginMethods, JitMethods
 from workos_login.utils import jit_create_user, update_user_profile
@@ -18,6 +19,8 @@ class SampleTests(TestCase):
             priority=3,
         )
     def test_user_creation(self):
+        group1 = Group.objects.create(name="Group1")
+        group2 = Group.objects.create(name="Group2")
         profile = {
             "first_name": "Santana",
             "last_name": "Clause",
@@ -29,7 +32,8 @@ class SampleTests(TestCase):
                     "locId": "123abc",
                     "address": "fake addr",
                     "city": "Fake City"
-                }
+                },
+                "groups": [group1.pk, group2.pk]
             }
         }
 
@@ -37,6 +41,7 @@ class SampleTests(TestCase):
             "~user_location": {
                 "location_id": "{{profile.raw_attributes.location.locId}}"
             },
+            "groups": "##profile.raw_attributes.groups",
             "user_location": {
                 "location_id": "{{profile.raw_attributes.location.locId}}",
                 "addresses": [
@@ -51,6 +56,8 @@ class SampleTests(TestCase):
 
         user = jit_create_user(self.sso_rule, profile)
         user = User.objects.get(pk=user.pk)
+        self.assertTrue(user.groups.filter(name="Group1").exists())
+        self.assertTrue(user.groups.filter(name="Group2").exists())
         self.assertEqual(user.first_name, "Santana")
         self.assertEqual(user.user_location.addresses.first().address1, "fake addr")
         self.assertEqual(user.user_location.addresses.first().city, "Fake City")
