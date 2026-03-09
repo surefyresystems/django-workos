@@ -125,6 +125,11 @@ class LoginRule(models.Model):
     environment = models.CharField(blank=True, default=EnvironmentChoices.PRODUCTION, choices=EnvironmentChoices.choices, max_length=10,
                                         help_text=_("Which environment should this login rule connect to"))
 
+    auto_update = models.BooleanField(default=True,
+                                      help_text=_("When disabled, explicitly prevents updating user first name, last name, and email on login."
+                                                  "This is only applicable when WORKOS_AUTO_UPDATE is enabled, otherwise auto updating is already disabled."
+                                                  "Having this field enabled when WORKOS_AUTO_UPDATE is disabled will have no effect."))
+
     objects = WorkosQuerySet.as_manager()
 
     class Meta:

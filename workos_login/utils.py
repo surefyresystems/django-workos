@@ -331,10 +331,11 @@ def update_user_profile(user: models.Model, rule: Optional[models.Model], profil
                  can update user attributes.
     """
     if conf.WORKOS_AUTO_UPDATE is True and rule:
-        user.first_name = profile["first_name"]
-        user.last_name = profile["last_name"]
-        user.email = profile["email"]
-        user.save()
+        if rule.auto_update:
+            user.first_name = profile["first_name"]
+            user.last_name = profile["last_name"]
+            user.email = profile["email"]
+            user.save()
         _update_attributes(user, rule.saved_attributes, profile, template_only=True)
 
 
