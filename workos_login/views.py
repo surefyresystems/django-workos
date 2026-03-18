@@ -281,7 +281,8 @@ class BaseCallbackView(RedirectView):
             workos_user_created.send(sender=UserLogin, user=user, profile=profile, rule=rule)
         else:
             try:
-                update_user_profile(user, rule, profile)
+                if not rule.magic_link:
+                    update_user_profile(user, rule, profile)
             except IntegrityError:
                 self.create_error(_("Unable to update user profile, please contact your administrator."))
 
