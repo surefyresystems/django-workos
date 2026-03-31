@@ -53,7 +53,14 @@ class LoginRuleAdmin(admin.ModelAdmin):
 
 
 class UserLoginAdmin(admin.ModelAdmin):
+    list_display = ("user", "user_email", "rule")
+    list_filter = ("rule",)
     readonly_fields = fields = ("mfa_factor", "mfa_type", "sso_id", "idp_id", "user", "rule", "created_at", "last_modified")
+    search_fields = ("user__username", "user__first_name", "user__last_name", "user__email")
+
+    @admin.display(description='Email', ordering='user__email')
+    def user_email(self, obj):
+        return obj.user.email if obj.user else None
 
 
 admin.site.register(LoginRule, LoginRuleAdmin)
