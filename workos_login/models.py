@@ -228,9 +228,10 @@ class LoginRule(models.Model):
             if has_mfa:
                 exists = UserLogin.objects.filter(user=user).exclude(mfa_factor="").exists()
 
-            has_sso = attrs.pop("has_sso", False)
-            if has_sso and not exists:
-                exists = UserLogin.objects.filter(user=user).exclude(sso_id="").exists()
+            if self.sso:
+                has_sso = attrs.pop("has_sso", False)
+                if has_sso and not exists:
+                    exists = UserLogin.objects.filter(user=user).exclude(sso_id="").exists()
 
             if not exists and attrs:
                 exists = get_users().filter(**attrs).filter(pk=user.pk).exists()
