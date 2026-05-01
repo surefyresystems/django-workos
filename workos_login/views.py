@@ -492,6 +492,8 @@ class WorkosLoginView(LoginView):
                 "code_challenge": code_challenge,
                 "code_challenge_method": "S256"
             }
+            if user and user.email:
+                params["login_hint"] = user.email
             authorization_url = f"{settings.PING_AUTHORIZATION_URL}?{parse.urlencode(params)}"
             return redirect(authorization_url)
 
