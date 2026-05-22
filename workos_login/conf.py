@@ -134,5 +134,25 @@ class Settings:
     def PING_SA_PASSWORD(self) -> str:
         return getattr(settings, 'PING_SA_PASSWORD', None)
 
+    @property
+    def WORKOS_VERIFICATION_FROM_EMAIL(self) -> str:
+        return getattr(settings, "WORKOS_VERIFICATION_FROM_EMAIL", settings.DEFAULT_FROM_EMAIL)
+
+    @property
+    def WORKOS_VERIFICATION_EMAIL_EXPIRATION_MINUTES(self) -> int:
+        return getattr(settings, "WORKOS_VERIFICATION_EMAIL_EXPIRATION_MINUTES", 5)
+
+    @property
+    def WORKOS_VERIFICATION_EMAIL_SUBJECT_TEMPLATE(self) -> str:
+        return getattr(settings, "WORKOS_VERIFICATION_EMAIL_SUBJECT_TEMPLATE", "email/verification_subject.txt")
+
+    @property
+    def WORKOS_VERIFICATION_EMAIL_TEXT_TEMPLATE(self) -> str:
+        return getattr(settings, "WORKOS_VERIFICATION_EMAIL_TEXT_TEMPLATE", "email/verification_body.txt")
+
+    @property
+    def WORKOS_VERIFICATION_EMAIL_HTML_TEMPLATE(self) -> str:
+        return getattr(settings, "WORKOS_VERIFICATION_EMAIL_HTML_TEMPLATE", "email/verification_body.html")
+
 
 conf = Settings()

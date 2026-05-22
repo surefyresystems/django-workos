@@ -23,12 +23,14 @@ from requests_oauthlib import OAuth2Session
 # Create your views here.
 from django.views.generic import FormView, RedirectView, TemplateView
 
-from workos_login.forms import LoginForm, MFAVerificationForm, MFAEnrollFormSMS, MFAEnrollFormTOTP
+from workos_login.forms import LoginForm, MFAVerificationForm, MFAEnrollFormSMS, MFAEnrollFormTOTP, \
+    EmailVerificationForm
 from workos_login.models import LoginRule, UserLogin, LoginMethods
 from workos_login.conf import conf
-from workos_login.signals import workos_user_created, workos_send_magic_link
+from workos_login.signals import workos_user_created, workos_send_magic_link, workos_email_verified
 from workos_login.utils import user_has_mfa_enabled, get_user_login_model, mfa_enroll, jit_create_user, \
-    pack_state, unpack_state, update_user_profile, find_user_by_email, get_users, has_user_login_model, find_user, get_client
+    pack_state, unpack_state, update_user_profile, find_user_by_email, get_users, has_user_login_model, find_user, get_client, \
+    send_email_verification_code
 
 from workos.exceptions import BadRequestException
 
@@ -662,5 +664,33 @@ class MFAEnrollTOTPView(LoginSuccessUrlMixin, FormView):
         ctx = super().get_context_data(**kwargs)
         ctx["is_totp"] = True
         return ctx
+
+
+class EmailVerificationView(MFAPermissionMixin, LoginSuccessUrlMixin, FormView):
+    template_name = 'registration/email_verification.html'
+    form_class = EmailVerificationForm
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["request"] = self.request
+        return kwargs
+
+    def form_valid(self, form):
+        workos_email_verified.send(sender=UserLogin, user=self.request.user)
+        return super(EmailVerificationView, self).form_valid(form)
+
+
+class ResendEmailVerificationView(MFAPermissionMixin, RedirectView):
+    permanent = False
+    pattern_name = 'email_verification'
+
+    def get_redirect_url(self, *args, **kwargs):
+        success = send_email_verification_code(self.request, self.request.user)
+        if success:
+            messages.success(self.request, _("A new verification code has been sent to your email."))
+        else:
+            messages.error(self.request, _("Failed to send verification email. Please try again."))
+
+        return super().get_redirect_url(*args, **kwargs)
 
 # Allow for an API post (open to all) to post a username/email to get the flow started.

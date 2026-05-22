@@ -1,0 +1,22 @@
+{% extends 'registration/base_registration.html' %}
+{% load i18n %}
+
+{% block card_header %}
+    <h2>Email Verification</h2>
+{% endblock %}
+
+{% block card_body %}
+
+  <form action="{{ app_path }}" method="post" id="login-form">{% csrf_token %}
+    <p>Please enter the 6 digit code that you received in your email.</p>
+
+    {% include 'registration/form.html' %}
+
+    <a href="{% url 'resend_email_verification' %}">Resend code.</a>
+
+    <div class="d-flex justify-content-end my-2">
+      <input type="submit" value="Verify" class="btn btn-primary"/>
+    </div>
+  </form>
+
+{% endblock %}

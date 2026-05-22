@@ -9,7 +9,7 @@ from django.core.exceptions import ValidationError
 import workos
 
 from workos_login.models import LoginRule
-from workos_login.utils import find_user, verify_challenge, totp_verify_code, user_has_mfa_enabled
+from workos_login.utils import find_user, verify_challenge, totp_verify_code, user_has_mfa_enabled, verify_email_code
 
 
 class BootstrapMixin:
@@ -151,6 +151,20 @@ class MFAEnrollFormTOTP(BootstrapMixin, forms.Form):
 
     def complete_enrollment(self, user):
         return self.cleaned_data["factor_id"]
+
+
+class EmailVerificationForm(BootstrapMixin, forms.Form):
+    verification_code = forms.IntegerField(required=True, widget=forms.NumberInput(attrs={"autofocus": True}))
+
+    def __init__(self, *args, **kwargs):
+        self.request = kwargs.pop("request", None)
+        super().__init__(*args, **kwargs)
+
+    def clean_verification_code(self):
+        code = self.cleaned_data.get('verification_code')
+        if not verify_email_code(self.request, code):
+            raise forms.ValidationError(_("Invalid verification code."))
+        return code
 
 
 class WorkosPasswordResetForm(BootstrapMixin, PasswordResetForm):

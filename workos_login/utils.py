@@ -1,10 +1,16 @@
 import json
+import secrets
 from typing import Optional, Any
+from datetime import timedelta, datetime
 from workos import WorkOSClient
 from django.contrib.auth import get_user_model
 from django.core import signing
 from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned, FieldDoesNotExist
+from django.core.mail import EmailMultiAlternatives
 from django.template import Template, Context
+from django.template.loader import render_to_string
+from django.http import HttpRequest
+from django.utils import timezone
 from workos.exceptions import BadRequestException
 
 from workos_login.conf import conf
@@ -12,6 +18,11 @@ from django.db import models, transaction
 import workos
 
 from workos_login.exceptions import RelationDoesNotExist, ImproperConfigurationError
+
+
+SESSION_EMAIL_VERIFICATION_KEY = "email_verification_code"
+SESSION_EMAIL_VERIFICATION_USER_KEY = "email_verification_user_id"
+SESSION_EMAIL_VERIFICATION_TIMESTAMP = "email_verification_timestamp"
 
 
 def get_users():
@@ -79,6 +90,84 @@ def has_user_login_model(user: models.Model) -> bool:
     """
     from workos_login.models import UserLogin
     return UserLogin.objects.filter(user=user).exists()
+
+
+def generate_verification_code(length: int=6) -> str:
+    """Generate a random numeric verification code"""
+    return ''.join(secrets.choice('0123456789') for _ in range(length))
+
+
+def send_email_verification_code(request: HttpRequest, user: models.Model) -> bool:
+    """
+    Generate a verification code, store it in the session, and send it via email.
+
+    :param request: The HTTP request object
+    :param user: The user to send the verification code to
+    :return: True if email was sent successfully
+    """
+    code = generate_verification_code()
+
+    request.session[SESSION_EMAIL_VERIFICATION_KEY] = code  # type: ignore[index]
+    request.session[SESSION_EMAIL_VERIFICATION_USER_KEY] = user.id  # type: ignore[index]
+    request.session[SESSION_EMAIL_VERIFICATION_TIMESTAMP] = timezone.now().isoformat()  # type: ignore[index]
+
+    context = {
+        'user': user,
+        'code': code,
+    }
+
+    subject = render_to_string(conf.WORKOS_VERIFICATION_EMAIL_SUBJECT_TEMPLATE, context).strip()
+    text_content = render_to_string(conf.WORKOS_VERIFICATION_EMAIL_TEXT_TEMPLATE, context)
+    html_content = render_to_string(conf.WORKOS_VERIFICATION_EMAIL_HTML_TEMPLATE, context)
+
+    try:
+        msg = EmailMultiAlternatives(
+            subject,
+            text_content,
+            conf.WORKOS_VERIFICATION_FROM_EMAIL,
+            [user.email]
+        )
+        msg.attach_alternative(html_content, "text/html")
+        msg.send(fail_silently=False)
+        return True
+    except Exception as e:
+        return False
+
+
+def verify_email_code(request: HttpRequest, entered_code: str) -> bool:
+    """
+    Verify the entered code against the session-stored code.
+
+    :param request: The HTTP request object
+    :param entered_code: The code entered by the user
+    :return: True if code is valid, False otherwise
+    """
+    stored_code = request.session.get(SESSION_EMAIL_VERIFICATION_KEY)  # type: ignore[index]
+    stored_user_id = request.session.get(SESSION_EMAIL_VERIFICATION_USER_KEY)  # type: ignore[index]
+    stored_timestamp_str = str(request.session.get(SESSION_EMAIL_VERIFICATION_TIMESTAMP))  # type: ignore[index]
+
+    if not stored_code or not stored_user_id or not stored_timestamp_str:
+        return False
+
+    if stored_user_id != request.user.id:
+        return False
+
+    stored_timestamp = datetime.fromisoformat(stored_timestamp_str)
+    expiration_time = stored_timestamp + timedelta(minutes=conf.WORKOS_VERIFICATION_EMAIL_EXPIRATION_MINUTES)
+    if timezone.now() > expiration_time:
+        del request.session[SESSION_EMAIL_VERIFICATION_KEY]  # type: ignore[index]
+        del request.session[SESSION_EMAIL_VERIFICATION_USER_KEY]  # type: ignore[index]
+        del request.session[SESSION_EMAIL_VERIFICATION_TIMESTAMP]  # type: ignore[index]
+        return False
+
+    if str(entered_code).strip() == str(stored_code).strip():
+        # Clear the session data after successful verification
+        del request.session[SESSION_EMAIL_VERIFICATION_KEY]  # type: ignore[index]
+        del request.session[SESSION_EMAIL_VERIFICATION_USER_KEY]  # type: ignore[index]
+        del request.session[SESSION_EMAIL_VERIFICATION_TIMESTAMP]  # type: ignore[index]
+        return True
+
+    return False
 
 
 def totp_verify_code(factor_id: str, code: str, client: WorkOSClient) -> bool:
