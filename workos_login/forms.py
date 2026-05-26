@@ -154,7 +154,7 @@ class MFAEnrollFormTOTP(BootstrapMixin, forms.Form):
 
 
 class EmailVerificationForm(BootstrapMixin, forms.Form):
-    verification_code = forms.IntegerField(required=True, widget=forms.NumberInput(attrs={"autofocus": True}))
+    verification_code = forms.CharField(required=True, widget=forms.TextInput(attrs={"autofocus": True}))
 
     def __init__(self, *args, **kwargs):
         self.request = kwargs.pop("request", None)
@@ -163,7 +163,7 @@ class EmailVerificationForm(BootstrapMixin, forms.Form):
     def clean_verification_code(self):
         code = self.cleaned_data.get('verification_code')
         if not verify_email_code(self.request, code):
-            raise forms.ValidationError(_("Invalid verification code."))
+            raise forms.ValidationError(_("Invalid Verification Code."))
         return code
 
 

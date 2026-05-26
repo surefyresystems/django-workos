@@ -1,0 +1,12 @@
+{% extends 'registration/email_verification.html' %}
+{% load i18n %}
+
+{% block card_header %}
+    <h2>Email MFA</h2>
+{% endblock %}
+
+{% block resend_link %}
+
+  {% url 'resend_email_mfa' %}
+
+{% endblock %}

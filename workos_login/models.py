@@ -148,7 +148,7 @@ class LoginRule(models.Model):
 
     @property
     def magic_link(self) -> bool:
-        return self.method == LoginMethods.MAGIC_LINK or self.method == LoginMethods.EMAIL_MFA
+        return self.method == LoginMethods.MAGIC_LINK
 
     @property
     def username(self) -> bool:

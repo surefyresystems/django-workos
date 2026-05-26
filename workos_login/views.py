@@ -30,7 +30,7 @@ from workos_login.conf import conf
 from workos_login.signals import workos_user_created, workos_send_magic_link, workos_email_verified
 from workos_login.utils import user_has_mfa_enabled, get_user_login_model, mfa_enroll, jit_create_user, \
     pack_state, unpack_state, update_user_profile, find_user_by_email, get_users, has_user_login_model, find_user, get_client, \
-    send_email_verification_code
+    send_email_verification_code, SESSION_EMAIL_VERIFICATION_TIMESTAMP, SESSION_EMAIL_VERIFICATION_KEY, SESSION_EMAIL_VERIFICATION_USER_KEY
 
 from workos.exceptions import BadRequestException
 
@@ -83,6 +83,15 @@ def clear_session_vars(request: HttpRequest) -> None:
 
     if SESSION_PING_CODE_VERIFIER in request.session:
         del request.session[SESSION_PING_CODE_VERIFIER]
+
+    if SESSION_EMAIL_VERIFICATION_TIMESTAMP in request.session:
+        del request.session[SESSION_EMAIL_VERIFICATION_TIMESTAMP]
+
+    if SESSION_EMAIL_VERIFICATION_KEY in request.session:
+        del request.session[SESSION_EMAIL_VERIFICATION_KEY]
+
+    if SESSION_EMAIL_VERIFICATION_USER_KEY in request.session:
+        del request.session[SESSION_EMAIL_VERIFICATION_USER_KEY]
 
 
 class UserNotFound(Exception):
@@ -448,7 +457,7 @@ class WorkosLoginView(LoginView):
             # This will log in the user - clear the workos session vars
             clear_session_vars(self.request)
             return super(WorkosLoginView, self).form_valid(form)
-        elif method == LoginMethods.MAGIC_LINK or method == LoginMethods.EMAIL_MFA:
+        elif method == LoginMethods.MAGIC_LINK:
             email = user.email
             uri = conf.WORKOS_MAGIC_REDIRECT_URI if conf.WORKOS_MAGIC_REDIRECT_URI else self.request.build_absolute_uri(reverse("magic_callback"))
             session = client.passwordless.create_session(
@@ -460,6 +469,16 @@ class WorkosLoginView(LoginView):
             if not conf.WORKOS_SEND_CUSTOM_EMAIL:
                 client.passwordless.send_session(session['id'])
             return redirect('magic_link_confirmation')
+        elif method == LoginMethods.EMAIL_MFA:
+            self.request.session[SESSION_AUTHENTICATED_USER_ID] = user.pk
+            self.request.session[SESSION_RULE_ID] = rule.pk
+
+            success = send_email_verification_code(self.request, user)
+            if not success:
+                messages.error(self.request, _("Failed to send verification email. Please try again."))
+                return self.form_invalid(form)
+
+            return redirect('email_mfa_verify')
         elif method == LoginMethods.SAML_SSO:
             uri = conf.WORKOS_SSO_REDIRECT_URI if conf.WORKOS_SSO_REDIRECT_URI else self.request.build_absolute_uri(reverse("sso_callback"))
             authorization_url = client.sso.get_authorization_url(
@@ -666,6 +685,25 @@ class MFAEnrollTOTPView(LoginSuccessUrlMixin, FormView):
         return ctx
 
 
+class ResendEmailMFAVerificationView(MFAPermissionMixin, LoginSuccessUrlMixin, RedirectView):
+    permanent = False
+    pattern_name = 'email_mfa_verify'
+
+    def get_redirect_url(self, *args, **kwargs):
+        user = get_session_user(self.request)
+        if not user:
+            messages.error(self.request, _("Session expired. Please login again."))
+            return reverse('login')
+
+        success = send_email_verification_code(self.request, user)
+        if success:
+            messages.success(self.request, _("A new verification code has been sent to your email."))
+        else:
+            messages.error(self.request, _("Failed to send verification email. Please try again."))
+
+        return super().get_redirect_url(*args, **kwargs)
+
+
 class EmailVerificationView(MFAPermissionMixin, LoginSuccessUrlMixin, FormView):
     template_name = 'registration/email_verification.html'
     form_class = EmailVerificationForm
@@ -678,6 +716,14 @@ class EmailVerificationView(MFAPermissionMixin, LoginSuccessUrlMixin, FormView):
     def form_valid(self, form):
         workos_email_verified.send(sender=UserLogin, user=self.request.user)
         return super(EmailVerificationView, self).form_valid(form)
+
+
+class EmailMFAVerificationView(EmailVerificationView):
+    template_name = 'registration/email_mfa_verify.html'
+
+    def form_valid(self, form):
+        login_session_user(self.request)
+        return super(EmailMFAVerificationView, self).form_valid(form)
 
 
 class ResendEmailVerificationView(MFAPermissionMixin, RedirectView):

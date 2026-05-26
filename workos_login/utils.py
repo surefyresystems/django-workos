@@ -142,6 +142,7 @@ def verify_email_code(request: HttpRequest, entered_code: str) -> bool:
     :param entered_code: The code entered by the user
     :return: True if code is valid, False otherwise
     """
+    from workos_login.views import SESSION_AUTHENTICATED_USER_ID
     stored_code = request.session.get(SESSION_EMAIL_VERIFICATION_KEY)  # type: ignore[index]
     stored_user_id = request.session.get(SESSION_EMAIL_VERIFICATION_USER_KEY)  # type: ignore[index]
     stored_timestamp_str = str(request.session.get(SESSION_EMAIL_VERIFICATION_TIMESTAMP))  # type: ignore[index]
@@ -149,7 +150,9 @@ def verify_email_code(request: HttpRequest, entered_code: str) -> bool:
     if not stored_code or not stored_user_id or not stored_timestamp_str:
         return False
 
-    if stored_user_id != request.user.id:
+    current_user_id = request.user.id if request.user.is_authenticated else request.session.get(SESSION_AUTHENTICATED_USER_ID)  # type: ignore[index]
+
+    if stored_user_id != current_user_id:
         return False
 
     stored_timestamp = datetime.fromisoformat(stored_timestamp_str)
