@@ -8,6 +8,7 @@ from workos_login.conf import conf
 from django.core.exceptions import ValidationError
 import workos
 
+from workos_login.exceptions import EmailVerificationError
 from workos_login.models import LoginRule
 from workos_login.utils import find_user, verify_challenge, totp_verify_code, user_has_mfa_enabled, verify_email_code
 
@@ -161,9 +162,11 @@ class EmailVerificationForm(BootstrapMixin, forms.Form):
         super().__init__(*args, **kwargs)
 
     def clean_verification_code(self):
-        code = self.cleaned_data.get('verification_code')
-        if not verify_email_code(self.request, code):
-            raise forms.ValidationError(_("Invalid Verification Code."))
+        code = self.cleaned_data.get('verification_code', '').strip()
+        try:
+            verify_email_code(self.request, code)
+        except EmailVerificationError as e:
+            raise forms.ValidationError(e)
         return code
 
 

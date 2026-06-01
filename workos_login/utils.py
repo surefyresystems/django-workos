@@ -11,9 +11,12 @@ from django.template import Template, Context
 from django.template.loader import render_to_string
 from django.http import HttpRequest
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 from workos.exceptions import BadRequestException
 
 from workos_login.conf import conf
+from workos_login.exceptions import EmailVerificationError
+from workos_login.signals import workos_send_email_verification
 from django.db import models, transaction
 import workos
 
@@ -114,7 +117,12 @@ def send_email_verification_code(request: HttpRequest, user: models.Model) -> bo
     context = {
         'user': user,
         'code': code,
+        'expiration_minutes': conf.WORKOS_VERIFICATION_EMAIL_EXPIRATION_MINUTES
     }
+
+    if conf.WORKOS_SEND_CUSTOM_EMAIL:
+        workos_send_email_verification.send(sender=None, user=user, verification_code=code)
+        return True
 
     subject = render_to_string(conf.WORKOS_VERIFICATION_EMAIL_SUBJECT_TEMPLATE, context).strip()
     text_content = render_to_string(conf.WORKOS_VERIFICATION_EMAIL_TEXT_TEMPLATE, context)
@@ -148,12 +156,12 @@ def verify_email_code(request: HttpRequest, entered_code: str) -> bool:
     stored_timestamp_str = str(request.session.get(SESSION_EMAIL_VERIFICATION_TIMESTAMP))  # type: ignore[index]
 
     if not stored_code or not stored_user_id or not stored_timestamp_str:
-        return False
+        raise EmailVerificationError(_("Unable to verify. Please request a new verification code."))
 
     current_user_id = request.user.id if request.user.is_authenticated else request.session.get(SESSION_AUTHENTICATED_USER_ID)  # type: ignore[index]
 
     if stored_user_id != current_user_id:
-        return False
+        raise EmailVerificationError(_("Unable to verify. Please request a new verification code."))
 
     stored_timestamp = datetime.fromisoformat(stored_timestamp_str)
     expiration_time = stored_timestamp + timedelta(minutes=conf.WORKOS_VERIFICATION_EMAIL_EXPIRATION_MINUTES)
@@ -161,7 +169,7 @@ def verify_email_code(request: HttpRequest, entered_code: str) -> bool:
         del request.session[SESSION_EMAIL_VERIFICATION_KEY]  # type: ignore[index]
         del request.session[SESSION_EMAIL_VERIFICATION_USER_KEY]  # type: ignore[index]
         del request.session[SESSION_EMAIL_VERIFICATION_TIMESTAMP]  # type: ignore[index]
-        return False
+        raise EmailVerificationError(_("Verification code has expired. Please request a new verification code."))
 
     if str(entered_code).strip() == str(stored_code).strip():
         # Clear the session data after successful verification
@@ -170,7 +178,7 @@ def verify_email_code(request: HttpRequest, entered_code: str) -> bool:
         del request.session[SESSION_EMAIL_VERIFICATION_TIMESTAMP]  # type: ignore[index]
         return True
 
-    return False
+    raise EmailVerificationError(_("Invalid Verification Code."))
 
 
 def totp_verify_code(factor_id: str, code: str, client: WorkOSClient) -> bool:

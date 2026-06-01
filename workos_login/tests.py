@@ -11,6 +11,7 @@ from django.core import mail
 from django.utils import timezone
 
 from workos_login.models import LoginRule, LoginMethods, UserLogin
+from workos_login.exceptions import EmailVerificationError
 import workos
 
 from workos_login.utils import (
@@ -170,6 +171,7 @@ class EmailVerificationTest(TestCase):
         request.user = self.user
         return request
 
+    @override_settings(WORKOS_SEND_CUSTOM_EMAIL=False)
     def test_send_email_success(self):
         """Test that email is sent successfully"""
         request = self._create_request_with_session()
@@ -191,6 +193,7 @@ class EmailVerificationTest(TestCase):
         self.assertIn(SESSION_EMAIL_VERIFICATION_TIMESTAMP, request.session)
         self.assertEqual(request.session[SESSION_EMAIL_VERIFICATION_USER_KEY], self.user.id)
 
+    @override_settings(WORKOS_SEND_CUSTOM_EMAIL=False)
     def test_email_contains_code(self):
         """Test that email contains the verification code"""
         request = self._create_request_with_session()
@@ -201,6 +204,7 @@ class EmailVerificationTest(TestCase):
         email_body = mail.outbox[0].body
         self.assertIn(code, email_body)
 
+    @override_settings(WORKOS_SEND_CUSTOM_EMAIL=False)
     def test_email_has_html_alternative(self):
         """Test that email has HTML alternative"""
         request = self._create_request_with_session()
@@ -229,9 +233,7 @@ class EmailVerificationTest(TestCase):
         request.session[SESSION_EMAIL_VERIFICATION_USER_KEY] = self.user.id
         request.session[SESSION_EMAIL_VERIFICATION_TIMESTAMP] = timezone.now().isoformat()
 
-        result = verify_email_code(request, "654321")
-
-        self.assertFalse(result)
+        self.assertRaises(EmailVerificationError, verify_email_code, request, "654321")
 
     def test_verify_clears_session_on_success(self):
         """Test that session data is cleared after successful verification"""
@@ -250,9 +252,7 @@ class EmailVerificationTest(TestCase):
         """Test that verification fails when no code in session"""
         request = self._create_request_with_session()
 
-        result = verify_email_code(request, "123456")
-
-        self.assertFalse(result)
+        self.assertRaises(EmailVerificationError, verify_email_code, request, "123456")
 
     def test_verify_wrong_user(self):
         """Test that verification fails for different user"""
@@ -263,9 +263,7 @@ class EmailVerificationTest(TestCase):
         request.session[SESSION_EMAIL_VERIFICATION_TIMESTAMP] = timezone.now().isoformat()
         request.user = self.user
 
-        result = verify_email_code(request, "123456")
-
-        self.assertFalse(result)
+        self.assertRaises(EmailVerificationError, verify_email_code, request, "123456")
 
     def test_form_valid_code(self):
         """Test form validation with correct code"""
@@ -290,6 +288,7 @@ class EmailVerificationTest(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('verification_code', form.errors)
 
+    @override_settings(WORKOS_SEND_CUSTOM_EMAIL=False)
     def test_resend_view_sends_email(self):
         """Test that resend view sends a new email"""
         response = self.client.get(reverse('resend_email_verification'))
