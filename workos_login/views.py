@@ -456,6 +456,16 @@ class WorkosLoginView(LoginView):
         elif method == LoginMethods.USERNAME:
             # This will log in the user - clear the workos session vars
             clear_session_vars(self.request)
+            if conf.WORKOS_FIRST_LOGIN_EMAIL_VERIFICATION and user.last_login is None:
+                self.request.session[SESSION_AUTHENTICATED_USER_ID] = user.pk
+                self.request.session[SESSION_RULE_ID] = rule.pk
+
+                success = send_email_verification_code(self.request, user)
+                if not success:
+                    messages.error(self.request, _("Failed to send verification email. Please try again."))
+                    return self.form_invalid(form)
+
+                return redirect('email_verification')
             return super(WorkosLoginView, self).form_valid(form)
         elif method == LoginMethods.MAGIC_LINK:
             email = user.email
@@ -714,16 +724,14 @@ class EmailVerificationView(MFAPermissionMixin, LoginSuccessUrlMixin, FormView):
         return kwargs
 
     def form_valid(self, form):
+        if not self.request.user.is_authenticated:
+            login_session_user(self.request)
         workos_email_verified.send(sender=UserLogin, user=self.request.user)
         return super(EmailVerificationView, self).form_valid(form)
 
 
 class EmailMFAVerificationView(EmailVerificationView):
     template_name = 'registration/email_mfa_verify.html'
-
-    def form_valid(self, form):
-        login_session_user(self.request)
-        return super(EmailMFAVerificationView, self).form_valid(form)
 
 
 class ResendEmailVerificationView(MFAPermissionMixin, RedirectView):
