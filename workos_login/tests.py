@@ -23,6 +23,7 @@ from workos_login.utils import (
     SESSION_EMAIL_VERIFICATION_TIMESTAMP
 )
 from workos_login.forms import EmailVerificationForm
+from workos_login.views import SESSION_RULE_ID
 
 
 
@@ -159,6 +160,12 @@ class EmailVerificationTest(TestCase):
             username='testuser',
             email='test@example.com',
             first_name='Test'
+        )
+        self.rule = LoginRule.objects.create(
+            name="testrule",
+            method=LoginMethods.USERNAME,
+            priority=1,
+            email_regex=""
         )
         self.client.force_login(self.user)
 
@@ -327,6 +334,8 @@ class EmailVerificationTest(TestCase):
 
         session = self.client.session
         code = session[SESSION_EMAIL_VERIFICATION_KEY]
+        session[SESSION_RULE_ID] = self.rule.pk
+        session.save()
 
         response = self.client.post(
             reverse('email_verification'),

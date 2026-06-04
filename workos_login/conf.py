@@ -135,8 +135,8 @@ class Settings:
         return getattr(settings, 'PING_SA_PASSWORD', None)
 
     @property
-    def WORKOS_FIRST_LOGIN_EMAIL_VERIFICATION(self):
-        return getattr(settings, "WORKOS_FIRST_LOGIN_EMAIL_VERIFICATION", False)
+    def WORKOS_FIRST_LOGIN_EMAIL_VERIFICATION(self) -> callable:
+        return getattr(settings, "WORKOS_FIRST_LOGIN_EMAIL_VERIFICATION", lambda user: False)
 
     @property
     def WORKOS_VERIFICATION_FROM_EMAIL(self) -> str:
