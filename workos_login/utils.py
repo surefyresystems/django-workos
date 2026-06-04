@@ -121,7 +121,10 @@ def send_email_verification_code(request: HttpRequest, user: models.Model) -> bo
     }
 
     if conf.WORKOS_SEND_CUSTOM_EMAIL:
-        workos_send_email_verification.send(sender=None, user=user, verification_code=code)
+        try:
+            workos_send_email_verification.send(sender=None, user=user, verification_code=code)
+        except Exception:
+            return False
         return True
 
     subject = render_to_string(conf.WORKOS_VERIFICATION_EMAIL_SUBJECT_TEMPLATE, context).strip()

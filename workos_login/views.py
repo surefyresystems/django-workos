@@ -27,7 +27,7 @@ from workos_login.forms import LoginForm, MFAVerificationForm, MFAEnrollFormSMS,
     EmailVerificationForm
 from workos_login.models import LoginRule, UserLogin, LoginMethods
 from workos_login.conf import conf
-from workos_login.signals import workos_user_created, workos_send_magic_link, workos_email_verified
+from workos_login.signals import workos_user_created, workos_send_magic_link, workos_email_verified, workos_magic_link_successful, workos_sso_successful, workos_mfa_successful
 from workos_login.utils import user_has_mfa_enabled, get_user_login_model, mfa_enroll, jit_create_user, \
     pack_state, unpack_state, update_user_profile, find_user_by_email, get_users, has_user_login_model, find_user, get_client, \
     send_email_verification_code, SESSION_EMAIL_VERIFICATION_TIMESTAMP, SESSION_EMAIL_VERIFICATION_KEY, SESSION_EMAIL_VERIFICATION_USER_KEY
@@ -153,6 +153,13 @@ class BaseCallbackView(RedirectView):
     query_string = False
     permanent = False
     allow_idp_initiated = False
+
+    def dispatch_signal(self):
+        """
+        Dispatch a signal after a successful login. This can be used by subclasses to dispatch different signals based
+        on the type of login that occurred.
+        """
+        pass
 
     def create_error(self, msg: str | list[str]) -> str:
         if isinstance(msg, list):
@@ -314,11 +321,15 @@ class BaseCallbackView(RedirectView):
         auth_login(self.request, user)
         clear_session_vars(self.request)
 
+        self.dispatch_signal()
+
         return next_url
 
 
 class MagicCallbackView(BaseCallbackView):
-    pass
+
+    def dispatch_signal(self):
+        workos_magic_link_successful.send(sender=None, user=self.request.user)
 
 
 class SSOCallbackView(BaseCallbackView):
@@ -336,6 +347,9 @@ class SSOCallbackView(BaseCallbackView):
         user_login.sso_id = workos_profile["id"]
         user_login.idp_id = workos_profile["idp_id"]
         user_login.save()
+
+    def dispatch_signal(self):
+        workos_sso_successful.send(sender=None, user=self.request.user)
 
 
 class PingSSOCallbackView(SSOCallbackView):
@@ -613,6 +627,7 @@ class MFAVerificationView(MFAPermissionMixin, LoginSuccessUrlMixin, FormView):
         if not self.request.user.is_authenticated:
             # They could be enrolling/verifying while logged in - only log in if needed
             login_session_user(self.request)
+            workos_mfa_successful.send(sender=None, user=self.request.user)
 
         if enrollment_factor:
             # We are enrolling so we want to save the factor ID
