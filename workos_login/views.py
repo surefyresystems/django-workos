@@ -106,7 +106,7 @@ def get_session_user(request: HttpRequest):
 
 
 def get_session_rule(request: HttpRequest) -> Optional[LoginRule]:
-    rule_id = request.session[SESSION_RULE_ID]
+    rule_id = request.session.get(SESSION_RULE_ID, None)
     if rule_id:
         return LoginRule.objects.get(pk=rule_id)
     return None
