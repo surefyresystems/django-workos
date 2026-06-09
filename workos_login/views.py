@@ -754,4 +754,15 @@ class ResendEmailVerificationView(MFAPermissionMixin, RedirectView):
 
         return super().get_redirect_url(*args, **kwargs)
 
+
+class SendAndVerifyEmailVerificationView(MFAPermissionMixin, RedirectView):
+    permanent = False
+    pattern_name = 'email_verification'
+
+    def get_redirect_url(self, *args, **kwargs):
+        success = send_email_verification_code(self.request, self.request.user)
+        if not success:
+            messages.error(self.request, _("Failed to send verification email. Please try again."))
+        return super().get_redirect_url(*args, **kwargs)
+
 # Allow for an API post (open to all) to post a username/email to get the flow started.
