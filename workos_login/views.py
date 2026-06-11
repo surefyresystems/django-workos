@@ -301,14 +301,15 @@ class BaseCallbackView(RedirectView):
         if not user.is_active:
             return self.create_error(_("Your user account is not active. Please contact your administrator."))
 
-        if not user_login:
+        if not user_login and not rule.magic_link:
             # First time through or could not match user_login based on workosID (this happens if using magic email and user email address changed).
             # Get the user login and set the rule that is being used.
             user_login = get_user_login_model(user)
             user_login.rule = rule
             user_login.save()
 
-        self.update_user_login(user_login, profile)
+        if user_login:
+            self.update_user_login(user_login, profile)
         # Login user and save sso attributes
         # Check if the user is active and has permissions
         auth_login(self.request, user)
