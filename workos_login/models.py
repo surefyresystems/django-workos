@@ -130,6 +130,8 @@ class LoginRule(models.Model):
                                                   "This is only applicable when WORKOS_AUTO_UPDATE is enabled, otherwise auto updating is already disabled."
                                                   "Having this field enabled when WORKOS_AUTO_UPDATE is disabled will have no effect."))
 
+    require_validated_email = models.BooleanField(default=False, help_text=_("Require email verification on first login for Username/Password users. Only applies when WORKOS_FIRST_LOGIN_EMAIL_VERIFICATION returns True for the user."))
+
     objects = WorkosQuerySet.as_manager()
 
     class Meta:

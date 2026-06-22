@@ -462,7 +462,7 @@ class WorkosLoginView(LoginView):
             clear_session_vars(self.request)
 
             should_verify = conf.WORKOS_FIRST_LOGIN_EMAIL_VERIFICATION(user)
-            if should_verify:
+            if rule.require_validated_email and should_verify:
                 self.request.session[SESSION_AUTHENTICATED_USER_ID] = user.pk
                 self.request.session[SESSION_RULE_ID] = rule.pk
 
