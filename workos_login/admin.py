@@ -32,7 +32,6 @@ class LoginRuleAdmin(admin.ModelAdmin):
         fieldset = copy.deepcopy(super().get_fieldsets(request, obj))
         # If there are no sandbox credentials - leave the default of production only
         if has_sandbox_credentials():
-            fieldset = copy.deepcopy(fieldset)
             fieldset[0][1]["fields"] += ("environment",)
         # Only show email validation option for username/password rules
         if obj and obj.method == LoginMethods.USERNAME:
