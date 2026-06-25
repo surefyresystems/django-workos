@@ -87,6 +87,12 @@ You can customize this package with some settings that can be added to your `set
 | `WORKOS_JIT_USERNAME`         | `email`                                | What should the username be set to? Options are `email`, `idp_id` or `id` (which is the WorkOS unique ID). For more control see Template Attributes section.                                                                                                             |
 | `WORKOS_ACTIVE_USER_FILTER`   | `{'is_active': True}`                  | What is the filter to get active users? You should only need to change this if you have your own user model.                                                                                                                                                             |
 | `LOGIN_REDIRECT_URL`          | `/accounts/profile/`                   | This [standard Django setting](https://docs.djangoproject.com/en/dev/ref/settings/#login-redirect-url) is respected to control where the user will end up after login                                                                                                    |
+| `WORKOS_FIRST_LOGIN_EMAIL_VERIFICATION`  | `lambda user: False`                   | Whether the user should be prompted for email verification on login. Expects a callable with a single argument `User` to return a boolean.                                                                                                                               |
+| `WORKOS_VERIFICATION_FROM_EMAIL`         | `settings.DEFAULT_FROM_EMAIL`          | The sender email address for verification emails. Defaults to the Django DEFAULT_FROM_EMAIL setting.                                                                                                                                                                     |
+| `WORKOS_VERIFICATION_EMAIL_EXPIRATION_MINUTES` | `5`                                    | How many minutes the email verification code is valid for.                                                                                                                                                                                                               |
+| `WORKOS_VERIFICATION_EMAIL_SUBJECT_TEMPLATE`   | `email/verification_subject.txt`       | The template used for the verification email subject.                                                                                                                                                                                                                    |
+| `WORKOS_VERIFICATION_EMAIL_TEXT_TEMPLATE`      | `email/verification_body.txt`          | The template used for the verification email body when sending as plain text.                                                                                                                                                                                            |
+| `WORKOS_VERIFICATION_EMAIL_HTML_TEMPLATE`      | `email/verification_body.html`         | The template used for the verification email body when sending as html.                                                                                                                                                                                                  |
 
 ### Updating Templates
 
@@ -297,4 +303,51 @@ def jit_user_created_handler(sender, **kwargs):
     
     body = "Your magic link: {}".format(magic_link)
     send_mail("Your passwordless login link is ready", body, settings.DEFAULT_FROM_EMAIL, [email])
+```
+
+### workos_send_email_verification
+If `WORKOS_SEND_CUSTOM_EMAIL` is set to `True` you must listen to this signal in order to send the email verification email.
+Example:
+
+```python
+from workos_login.signals import workos_send_email_verification
+from django.dispatch import receiver
+from django.core.mail import send_mail
+from django.conf import settings
+
+@receiver(workos_send_email_verification)
+def send_email_verification(sender, **kwargs):
+    """
+    Send a custom email verification message to the user.
+    """
+    user = kwargs["user"]
+    verification_code = kwargs["verification_code"]
+    login_rule = kwargs["rule"]
+    
+    body = "Your verification code is: {}".format(verification_code)
+    send_mail("Email Verification Code", body, settings.DEFAULT_FROM_EMAIL, [user.email])
+```
+
+
+### workos_email_verified
+This signal is sent when a user successfully verifies their email for the first time.
+
+For login methods other than Username/Password, this signal is dispatched on the user's first successful login.
+Example:
+
+```python
+from workos_login.signals import workos_email_verified
+from django.dispatch import receiver
+
+@receiver(workos_email_verified)
+def email_verified(sender, **kwargs):
+    """
+    Handle a user successfully verifying their email for the first time.
+    """
+    user = kwargs["user"]
+    login_rule = kwargs["rule"]
+    
+    if not user.email_validated:
+        user.email_validated = True
+        user.save(update_fields=["email_validated"])
 ```

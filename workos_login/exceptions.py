@@ -7,3 +7,7 @@ class RelationDoesNotExist(Exception):
 
 class ImproperConfigurationError(Exception):
     pass
+
+
+class EmailVerificationError(Exception):
+    pass

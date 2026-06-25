@@ -2,7 +2,7 @@ from django.utils.html import format_html
 from workos.exceptions import BadRequestException
 from django.utils.translation import gettext_lazy as _
 import copy
-from workos_login.models import LoginRule, UserLogin
+from workos_login.models import LoginRule, UserLogin, LoginMethods
 
 from django.contrib import admin
 from workos import client as workos_client
@@ -28,13 +28,14 @@ class LoginRuleAdmin(admin.ModelAdmin):
         }),
     )
 
-    def get_fieldsets(self, *args, **kwargs):
-        fieldset = super().get_fieldsets(*args, **kwargs)
+    def get_fieldsets(self, request, obj=None, *args, **kwargs):
+        fieldset = copy.deepcopy(super().get_fieldsets(request, obj))
         # If there are no sandbox credentials - leave the default of production only
         if has_sandbox_credentials():
-            ret = copy.deepcopy(fieldset)
-            ret[0][1]["fields"] += ("environment",)
-            return ret
+            fieldset[0][1]["fields"] += ("environment",)
+        # Only show email validation option for username/password rules
+        if obj and obj.method == LoginMethods.USERNAME:
+            fieldset[0][1]["fields"] += ("require_validated_email",)
         return fieldset
 
     @admin.display(

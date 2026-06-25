@@ -1,0 +1,5 @@
+Hello {{ user.first_name }},
+
+Your verification code is: {{ code }}
+
+This code will expire in {{expiration_minutes}} minutes.
