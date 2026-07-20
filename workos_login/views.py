@@ -6,7 +6,7 @@ import secrets
 
 from django.contrib import messages
 from django.contrib.auth.mixins import UserPassesTestMixin
-from django.contrib.auth.views import LoginView
+from django.contrib.auth.views import LoginView, LogoutView
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
 from django.http import JsonResponse, Http404, HttpRequest
@@ -756,4 +756,12 @@ class ResendEmailVerificationView(MFAPermissionMixin, RedirectView):
 
         return super().get_redirect_url(*args, **kwargs)
 
-# Allow for an API post (open to all) to post a username/email to get the flow started.
+
+class WorkosLogoutView(LogoutView):
+
+    def post(self, request, *args, **kwargs):
+        login_rule = LoginRule.objects.find_rule_for_user(request.user)
+        if login_rule and login_rule.single_logout:
+            if login_rule.custom_logout_url:
+                return redirect(login_rule.custom_logout_url)
+        return super().post(request, *args, **kwargs)
