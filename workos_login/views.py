@@ -14,7 +14,7 @@ from django.shortcuts import redirect, resolve_url
 from django.conf import settings
 from django.urls import reverse
 from django.views.decorators.http import require_GET
-from django.contrib.auth import login as auth_login
+from django.contrib.auth import login as auth_login, logout as auth_logout
 from django.utils.translation import gettext_lazy as _
 
 import workos
@@ -762,6 +762,7 @@ class WorkosLogoutView(LogoutView):
     def post(self, request, *args, **kwargs):
         login_rule = LoginRule.objects.find_rule_for_user(request.user)
         if login_rule and login_rule.single_logout:
+            auth_logout(request)
             if login_rule.custom_logout_url:
                 return redirect(login_rule.custom_logout_url)
         return super().post(request, *args, **kwargs)

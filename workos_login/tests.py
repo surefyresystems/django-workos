@@ -430,3 +430,31 @@ class WorkosLogoutViewTest(TestCase):
 
         self.assertFalse(get_user(self.client).is_authenticated)
         self.assertEqual(response.status_code, 302)
+
+    def test_logout_anonymous_user_no_rule(self):
+        """Logging out as an anonymous user with no matching rule should not error."""
+        self.client.logout()
+        self.assertTrue(get_user(self.client).is_anonymous)
+        with patch(
+                "workos_login.models.LoginRule.objects.find_rule_for_user",
+                return_value=None,
+        ):
+            response = self.client.post(reverse("logout"))
+
+        self.assertFalse(get_user(self.client).is_authenticated)
+        self.assertEqual(response.status_code, 302)
+
+    def test_logout_anonymous_user_with_custom_url_redirects(self):
+        """Logging out as an anonymous user should still respect a matching rule's custom_logout_url."""
+        self.client.logout()
+        custom_url = "https://example.com/custom-logout"
+        rule = MagicMock(single_logout=True, custom_logout_url=custom_url)
+        self.assertTrue(get_user(self.client).is_anonymous)
+        with patch(
+                "workos_login.models.LoginRule.objects.find_rule_for_user",
+                return_value=rule,
+        ):
+            response = self.client.post(reverse("logout"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, custom_url)
