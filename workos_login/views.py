@@ -762,7 +762,7 @@ class WorkosLogoutView(LogoutView):
     def post(self, request, *args, **kwargs):
         login_rule = LoginRule.objects.find_rule_for_user(request.user)
         if login_rule and login_rule.single_logout:
-            auth_logout(request)
             if login_rule.custom_logout_url:
+                auth_logout(request)
                 return redirect(login_rule.custom_logout_url)
         return super().post(request, *args, **kwargs)
