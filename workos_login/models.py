@@ -97,6 +97,12 @@ class EnvironmentChoices(models.TextChoices):
     PRODUCTION = "production", "Production"
     SANDBOX = "sandbox", "Sandbox"
 
+
+class LogoutMethods(models.TextChoices):
+    DEFAULT = "default", "Default"
+    CUSTOM_URL = "custom_url", "Custom URL"
+
+
 class LoginRule(models.Model):
     name = models.CharField(max_length=255, help_text=_("Name for this config"), unique=True)
     lookup_attributes = models.JSONField(blank=True, null=True)
@@ -132,8 +138,8 @@ class LoginRule(models.Model):
 
     require_validated_email = models.BooleanField(default=False, help_text=_("Require email verification on first login for Username/Password users. Only applies when WORKOS_FIRST_LOGIN_EMAIL_VERIFICATION returns True for the user."))
 
-    use_single_logout = models.BooleanField(default=False, help_text=_("When enabled, users will be logged out of the IdP when they log out of your application. Only applies to SAML SSO."))
-    custom_logout_url = models.TextField(blank=True, null=True, help_text=_("If `Use Single Logout` is enabled, this URL can be used as a custom logout URL for the IdP. Only applies to SAML SSO."))
+    sso_logout_method = models.CharField(blank=True, null=True, choices=LogoutMethods.choices, default=LogoutMethods.DEFAULT, max_length=15, help_text=_("Which logout method to use for SSO. Default will use the workos logout method. Custom URL will redirect to the custom logout URL if set. Only applies to SAML SSO."))
+    custom_logout_url = models.TextField(blank=True, null=True, help_text=_("If the SSO Logout Method is `Custom URL`, then this URL can be used as a custom logout URL for the IdP. Only applies to SAML SSO."))
 
     objects = WorkosQuerySet.as_manager()
 
@@ -162,10 +168,6 @@ class LoginRule(models.Model):
     @property
     def requires_password(self) -> bool:
         return self.mfa or self.username or self.method == LoginMethods.EMAIL_MFA
-
-    @property
-    def single_logout(self) -> bool:
-        return self.sso and self.use_single_logout
 
     def clean(self):
         errors = {}

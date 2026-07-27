@@ -25,7 +25,7 @@ from django.views.generic import FormView, RedirectView, TemplateView
 
 from workos_login.forms import LoginForm, MFAVerificationForm, MFAEnrollFormSMS, MFAEnrollFormTOTP, \
     EmailVerificationForm
-from workos_login.models import LoginRule, UserLogin, LoginMethods
+from workos_login.models import LoginRule, UserLogin, LoginMethods, LogoutMethods
 from workos_login.conf import conf
 from workos_login.signals import workos_user_created, workos_send_magic_link, workos_email_verified
 from workos_login.utils import user_has_mfa_enabled, get_user_login_model, mfa_enroll, jit_create_user, \
@@ -761,8 +761,7 @@ class WorkosLogoutView(LogoutView):
 
     def post(self, request, *args, **kwargs):
         login_rule = LoginRule.objects.find_rule_for_user(request.user)
-        if login_rule and login_rule.single_logout:
-            if login_rule.custom_logout_url:
-                auth_logout(request)
-                return redirect(login_rule.custom_logout_url)
+        if login_rule and login_rule.sso and login_rule.sso_logout_method == LogoutMethods.CUSTOM_URL and login_rule.custom_logout_url:
+            auth_logout(request)
+            return redirect(login_rule.custom_logout_url)
         return super().post(request, *args, **kwargs)

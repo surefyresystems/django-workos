@@ -21,7 +21,7 @@ class LoginRuleAdmin(admin.ModelAdmin):
             'fields': ('email_regex', 'lookup_attributes',)
         }),
         ('SSO Options', {
-            'fields': ('connection_id', 'organization_id', 'saved_attributes', 'jit_creation_type', 'jit_groups', 'portal_link', 'auto_update', 'use_single_logout', 'custom_logout_url')
+            'fields': ('connection_id', 'organization_id', 'saved_attributes', 'jit_creation_type', 'jit_groups', 'portal_link', 'auto_update', 'sso_logout_method', 'custom_logout_url')
         }),
         ('MFA Options', {
             'fields': ('totp_organization_name',)

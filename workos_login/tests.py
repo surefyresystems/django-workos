@@ -10,7 +10,7 @@ from django.urls import reverse
 from django.core import mail
 from django.utils import timezone
 
-from workos_login.models import LoginRule, LoginMethods, UserLogin
+from workos_login.models import LoginRule, LoginMethods, UserLogin, LogoutMethods
 from workos_login.exceptions import EmailVerificationError
 import workos
 
@@ -396,7 +396,7 @@ class WorkosLogoutViewTest(TestCase):
 
     def test_logout_rule_without_single_logout_uses_default_behavior(self):
         """If the rule does not have single_logout enabled, default logout should occur."""
-        rule = MagicMock(single_logout=False, custom_logout_url=None)
+        rule = MagicMock(sso_logout_method=None, custom_logout_url=None)
         with patch(
             "workos_login.models.LoginRule.objects.find_rule_for_user",
             return_value=rule,
@@ -409,7 +409,7 @@ class WorkosLogoutViewTest(TestCase):
     def test_logout_with_single_logout_and_custom_url_redirects(self):
         """If single_logout is enabled and a custom_logout_url is set, redirect there."""
         custom_url = "https://example.com/custom-logout"
-        rule = MagicMock(single_logout=True, custom_logout_url=custom_url)
+        rule = MagicMock(sso_logout_method=LogoutMethods.CUSTOM_URL, custom_logout_url=custom_url)
         with patch(
             "workos_login.models.LoginRule.objects.find_rule_for_user",
             return_value=rule,
@@ -421,7 +421,7 @@ class WorkosLogoutViewTest(TestCase):
 
     def test_logout_with_single_logout_but_no_custom_url_uses_default_behavior(self):
         """If single_logout is enabled but no custom_logout_url is set, default logout should occur."""
-        rule = MagicMock(single_logout=True, custom_logout_url=None)
+        rule = MagicMock(sso_logout_method=LogoutMethods.CUSTOM_URL, custom_logout_url=None)
         with patch(
             "workos_login.models.LoginRule.objects.find_rule_for_user",
             return_value=rule,
@@ -448,7 +448,7 @@ class WorkosLogoutViewTest(TestCase):
         """Logging out as an anonymous user should still respect a matching rule's custom_logout_url."""
         self.client.logout()
         custom_url = "https://example.com/custom-logout"
-        rule = MagicMock(single_logout=True, custom_logout_url=custom_url)
+        rule = MagicMock(sso_logout_method=LogoutMethods.CUSTOM_URL, custom_logout_url=custom_url)
         self.assertTrue(get_user(self.client).is_anonymous)
         with patch(
                 "workos_login.models.LoginRule.objects.find_rule_for_user",
