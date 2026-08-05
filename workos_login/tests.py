@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from functools import partial
 from datetime import timedelta
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from django.contrib.auth import get_user_model, get_user
 from django.contrib.messages import get_messages
 from django.contrib.sessions.middleware import SessionMiddleware
@@ -10,7 +10,7 @@ from django.urls import reverse
 from django.core import mail
 from django.utils import timezone
 
-from workos_login.models import LoginRule, LoginMethods, UserLogin
+from workos_login.models import LoginRule, LoginMethods, UserLogin, LogoutMethods
 from workos_login.exceptions import EmailVerificationError
 import workos
 
@@ -373,3 +373,88 @@ class EmailVerificationTest(TestCase):
 
         form = response.context['form']
         self.assertFalse(form.is_valid())
+
+
+class WorkosLogoutViewTest(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="logout_user",
+            email="logout_user@example.com",
+        )
+        self.client.force_login(self.user)
+
+    def test_logout_no_rule_uses_default_behavior(self):
+        """If no LoginRule is associated with the user, default logout should occur."""
+        with patch(
+            "workos_login.models.LoginRule.objects.find_rule_for_user",
+            return_value=None,
+        ):
+            response = self.client.post(reverse("logout"))
+
+        self.assertFalse(get_user(self.client).is_authenticated)
+        self.assertEqual(response.status_code, 302)
+
+    def test_logout_rule_without_single_logout_uses_default_behavior(self):
+        """If the rule does not have single_logout enabled, default logout should occur."""
+        rule = MagicMock(sso_logout_method=None, custom_logout_url=None)
+        with patch(
+            "workos_login.models.LoginRule.objects.find_rule_for_user",
+            return_value=rule,
+        ):
+            response = self.client.post(reverse("logout"))
+
+        self.assertFalse(get_user(self.client).is_authenticated)
+        self.assertEqual(response.status_code, 302)
+
+    def test_logout_with_single_logout_and_custom_url_redirects(self):
+        """If single_logout is enabled and a custom_logout_url is set, redirect there."""
+        custom_url = "https://example.com/custom-logout"
+        rule = MagicMock(sso_logout_method=LogoutMethods.CUSTOM_URL, custom_logout_url=custom_url)
+        with patch(
+            "workos_login.models.LoginRule.objects.find_rule_for_user",
+            return_value=rule,
+        ):
+            response = self.client.post(reverse("logout"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, custom_url)
+
+    def test_logout_with_single_logout_but_no_custom_url_uses_default_behavior(self):
+        """If single_logout is enabled but no custom_logout_url is set, default logout should occur."""
+        rule = MagicMock(sso_logout_method=LogoutMethods.CUSTOM_URL, custom_logout_url=None)
+        with patch(
+            "workos_login.models.LoginRule.objects.find_rule_for_user",
+            return_value=rule,
+        ):
+            response = self.client.post(reverse("logout"))
+
+        self.assertFalse(get_user(self.client).is_authenticated)
+        self.assertEqual(response.status_code, 302)
+
+    def test_logout_anonymous_user_no_rule(self):
+        """Logging out as an anonymous user with no matching rule should not error."""
+        self.client.logout()
+        self.assertTrue(get_user(self.client).is_anonymous)
+        with patch(
+                "workos_login.models.LoginRule.objects.find_rule_for_user",
+                return_value=None,
+        ):
+            response = self.client.post(reverse("logout"))
+
+        self.assertFalse(get_user(self.client).is_authenticated)
+        self.assertEqual(response.status_code, 302)
+
+    def test_logout_anonymous_user_with_custom_url_redirects(self):
+        """Logging out as an anonymous user should still respect a matching rule's custom_logout_url."""
+        self.client.logout()
+        custom_url = "https://example.com/custom-logout"
+        rule = MagicMock(sso_logout_method=LogoutMethods.CUSTOM_URL, custom_logout_url=custom_url)
+        self.assertTrue(get_user(self.client).is_anonymous)
+        with patch(
+                "workos_login.models.LoginRule.objects.find_rule_for_user",
+                return_value=rule,
+        ):
+            response = self.client.post(reverse("logout"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, custom_url)

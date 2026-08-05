@@ -6,7 +6,7 @@ import secrets
 
 from django.contrib import messages
 from django.contrib.auth.mixins import UserPassesTestMixin
-from django.contrib.auth.views import LoginView
+from django.contrib.auth.views import LoginView, LogoutView
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
 from django.http import JsonResponse, Http404, HttpRequest
@@ -14,7 +14,7 @@ from django.shortcuts import redirect, resolve_url
 from django.conf import settings
 from django.urls import reverse
 from django.views.decorators.http import require_GET
-from django.contrib.auth import login as auth_login
+from django.contrib.auth import login as auth_login, logout as auth_logout
 from django.utils.translation import gettext_lazy as _
 
 import workos
@@ -25,7 +25,7 @@ from django.views.generic import FormView, RedirectView, TemplateView
 
 from workos_login.forms import LoginForm, MFAVerificationForm, MFAEnrollFormSMS, MFAEnrollFormTOTP, \
     EmailVerificationForm
-from workos_login.models import LoginRule, UserLogin, LoginMethods
+from workos_login.models import LoginRule, UserLogin, LoginMethods, LogoutMethods
 from workos_login.conf import conf
 from workos_login.signals import workos_user_created, workos_send_magic_link, workos_email_verified
 from workos_login.utils import user_has_mfa_enabled, get_user_login_model, mfa_enroll, jit_create_user, \
@@ -756,4 +756,12 @@ class ResendEmailVerificationView(MFAPermissionMixin, RedirectView):
 
         return super().get_redirect_url(*args, **kwargs)
 
-# Allow for an API post (open to all) to post a username/email to get the flow started.
+
+class WorkosLogoutView(LogoutView):
+
+    def post(self, request, *args, **kwargs):
+        login_rule = LoginRule.objects.find_rule_for_user(request.user)
+        if login_rule and login_rule.sso and login_rule.sso_logout_method == LogoutMethods.CUSTOM_URL and login_rule.custom_logout_url:
+            auth_logout(request)
+            return redirect(login_rule.custom_logout_url)
+        return super().post(request, *args, **kwargs)

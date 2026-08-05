@@ -2,14 +2,30 @@ from django.utils.html import format_html
 from workos.exceptions import BadRequestException
 from django.utils.translation import gettext_lazy as _
 import copy
-from workos_login.models import LoginRule, UserLogin, LoginMethods
+from workos_login.models import LoginRule, UserLogin, LoginMethods, LogoutMethods
 
 from django.contrib import admin
+from django import forms
 from workos import client as workos_client
 from workos_login.utils import has_sandbox_credentials
 
 
+class LoginRuleAdminForm(forms.ModelForm):
+    class Meta:
+        model = LoginRule
+        fields = '__all__'
+
+    def clean(self):
+        cleaned_data = super().clean()
+        sso_logout_method = cleaned_data.get('sso_logout_method')
+        custom_logout_url = cleaned_data.get('custom_logout_url')
+        if sso_logout_method == LogoutMethods.CUSTOM_URL and not custom_logout_url:
+            self.add_error('custom_logout_url', _("This field is required when SSO Logout Method is set to Custom URL."))
+        return cleaned_data
+
+
 class LoginRuleAdmin(admin.ModelAdmin):
+    form = LoginRuleAdminForm
     list_display = ("name", "priority", "method")
     filter_horizontal = ("jit_groups",)
     readonly_fields = ('portal_link',)
@@ -21,7 +37,7 @@ class LoginRuleAdmin(admin.ModelAdmin):
             'fields': ('email_regex', 'lookup_attributes',)
         }),
         ('SSO Options', {
-            'fields': ('connection_id', 'organization_id', 'saved_attributes', 'jit_creation_type', 'jit_groups', 'portal_link', 'auto_update')
+            'fields': ('connection_id', 'organization_id', 'saved_attributes', 'jit_creation_type', 'jit_groups', 'portal_link', 'auto_update', 'sso_logout_method', 'custom_logout_url')
         }),
         ('MFA Options', {
             'fields': ('totp_organization_name',)
