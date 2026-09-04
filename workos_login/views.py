@@ -99,7 +99,7 @@ class UserNotFound(Exception):
 
 
 def get_session_user(request: HttpRequest):
-    user_id = request.session[SESSION_AUTHENTICATED_USER_ID]
+    user_id = request.session.get(SESSION_AUTHENTICATED_USER_ID)
     if(user_id):
         return get_users().get(pk=user_id)
     return None
