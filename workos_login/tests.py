@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from functools import partial
 from datetime import timedelta
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, Mock
 from django.contrib.auth import get_user_model, get_user
 from django.contrib.messages import get_messages
 from django.contrib.sessions.middleware import SessionMiddleware
@@ -10,9 +10,11 @@ from django.urls import reverse
 from django.core import mail
 from django.utils import timezone
 
+from workos_login.admin import LoginRuleAdmin
 from workos_login.models import LoginRule, LoginMethods, UserLogin, LogoutMethods
 from workos_login.exceptions import EmailVerificationError
 import workos
+from django.contrib import admin as django_admin
 
 from workos_login.utils import (
     jit_create_user,
@@ -458,3 +460,139 @@ class WorkosLogoutViewTest(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, custom_url)
+
+
+class SelfServiceConnectionsTest(TestCase):
+    def setUp(self):
+        self.staff = get_user_model().objects.create_user(
+            username="staff_user",
+            email="staff@example.com",
+            is_staff=True,
+        )
+        self.rule = LoginRule.objects.create(
+            name="SSO Rule",
+            method=LoginMethods.SAML_SSO,
+            organization_id="org_123",
+            priority=5,
+            email_regex="test@ssoconn.com",
+        )
+
+    def test_status_denied_without_managed_rule(self):
+        """Default WORKOS_GET_MANAGED_RULE returns None, so access is denied even for staff."""
+        self.client.force_login(self.staff)
+        response = self.client.get(reverse("workos_connection_status"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_status_denied_for_non_staff(self):
+        """Default WORKOS_CONNECTION_MANAGER_TEST is staff-only."""
+        user = get_user_model().objects.create_user(username="regular", email="regular@example.com")
+        self.client.force_login(user)
+        with override_settings(WORKOS_GET_MANAGED_RULE=lambda request: self.rule):
+            response = self.client.get(reverse("workos_connection_status"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_status_shows_live_connection_by_organization(self):
+        """A rule with only organization_id set looks up the connection via list_connections."""
+        self.client.force_login(self.staff)
+        connection = Mock(state="active", connection_type="OktaSAML", name="Acme Co", updated_at="2026-09-01")
+        with override_settings(WORKOS_GET_MANAGED_RULE=lambda request: self.rule):
+            with patch("workos_login.connections.get_client") as mock_get_client:
+                mock_get_client.return_value.sso.list_connections.return_value = MagicMock(data=[connection])
+                response = self.client.get(reverse("workos_connection_status"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "active")
+        mock_get_client.return_value.sso.list_connections.assert_called_once_with(organization_id="org_123")
+
+    def test_status_shows_live_connection_by_connection_id(self):
+        """A rule with only connection_id set looks up the connection via get_connection."""
+        rule = LoginRule.objects.create(
+            name="Direct Connection Rule",
+            method=LoginMethods.SAML_SSO,
+            connection_id="conn_123",
+            priority=6,
+            email_regex="test2@ssoconn.com",
+        )
+        self.client.force_login(self.staff)
+        connection = Mock(state="active", connection_type="AzureSAML", name="Acme Co", updated_at="2026-09-01")
+        with override_settings(WORKOS_GET_MANAGED_RULE=lambda request: rule):
+            with patch("workos_login.connections.get_client") as mock_get_client:
+                mock_get_client.return_value.sso.get_connection.return_value = connection
+                response = self.client.get(reverse("workos_connection_status"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "active")
+        mock_get_client.return_value.sso.get_connection.assert_called_once_with("conn_123")
+
+    def test_status_empty_state_when_no_connection_configured(self):
+        """A rule with neither connection_id nor organization_id set shows the empty state."""
+        rule = LoginRule.objects.create(
+            name="Unconfigured Rule",
+            method=LoginMethods.SAML_SSO,
+            priority=7,
+            email_regex="test3@ssoconn.com",
+        )
+        self.client.force_login(self.staff)
+        with override_settings(WORKOS_GET_MANAGED_RULE=lambda request: rule):
+            response = self.client.get(reverse("workos_connection_status"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "haven't configured")
+
+    def test_setup_redirects_to_fresh_portal_link_using_environment_aware_client(self):
+        """The redirect view must use get_client(rule), not the bare SDK client."""
+        self.client.force_login(self.staff)
+        with override_settings(WORKOS_GET_MANAGED_RULE=lambda request: self.rule):
+            with patch("workos_login.connections.get_client") as mock_get_client:
+                mock_get_client.return_value.portal.generate_link.return_value = MagicMock(
+                    link="https://id.workos.com/portal/abc"
+                )
+                response = self.client.get(reverse("workos_connection_setup"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, "https://id.workos.com/portal/abc")
+        mock_get_client.assert_called_once_with(self.rule)
+        mock_get_client.return_value.portal.generate_link.assert_called_once_with(
+            organization_id="org_123", intent="sso", return_url=None, success_url=None,
+        )
+
+
+class LoginRuleAdminConnectionStatusTest(TestCase):
+    def setUp(self):
+        self.admin = LoginRuleAdmin(LoginRule, django_admin.site)
+
+    def test_connection_status_unavailable_without_ids(self):
+        rule = LoginRule.objects.create(
+            name="Unconfigured Admin Rule",
+            method=LoginMethods.USERNAME,
+            priority=60,
+            email_regex="admin1@ssoconn.com",
+        )
+        result = str(self.admin.connection_status(rule))
+        self.assertIn("Only available", result)
+
+    def test_connection_status_shows_no_connection_configured(self):
+        rule = LoginRule.objects.create(
+            name="Admin Rule No Connection",
+            method=LoginMethods.SAML_SSO,
+            organization_id="org_admin_1",
+            priority=61,
+            email_regex="admin2@ssoconn.com",
+        )
+        with patch("workos_login.admin.get_connection_status", return_value=None):
+            result = str(self.admin.connection_status(rule))
+        self.assertIn("No connection configured yet", result)
+
+    def test_connection_status_shows_live_state(self):
+        rule = LoginRule.objects.create(
+            name="Admin Rule Live",
+            method=LoginMethods.SAML_SSO,
+            organization_id="org_admin_2",
+            priority=62,
+            email_regex="admin3@ssoconn.com",
+        )
+        connection = Mock(state="active", connection_type="OktaSAML", name="Acme Co")
+        with patch("workos_login.admin.get_connection_status", return_value=connection):
+            result = str(self.admin.connection_status(rule))
+        self.assertIn("active", result)
+        self.assertIn("OktaSAML", result)

@@ -23,6 +23,7 @@ from requests_oauthlib import OAuth2Session
 # Create your views here.
 from django.views.generic import FormView, RedirectView, TemplateView
 
+from workos_login.connections import get_connection_status, get_portal_link
 from workos_login.forms import LoginForm, MFAVerificationForm, MFAEnrollFormSMS, MFAEnrollFormTOTP, \
     EmailVerificationForm
 from workos_login.models import LoginRule, UserLogin, LoginMethods, LogoutMethods
@@ -755,6 +756,45 @@ class ResendEmailVerificationView(MFAPermissionMixin, RedirectView):
             messages.error(self.request, _("Failed to send verification email. Please try again."))
 
         return super().get_redirect_url(*args, **kwargs)
+
+
+class ConnectionManagerMixin(UserPassesTestMixin):
+    """
+    Restricts the self-service connection views below to whichever LoginRule
+    WORKOS_GET_MANAGED_RULE resolves for the current request, gated by
+    WORKOS_CONNECTION_MANAGER_TEST. Both are host-app configurable since this
+    package has no built-in notion of a customer/tenant.
+    """
+    def get_managed_rule(self) -> Optional[LoginRule]:
+        if not hasattr(self, "_managed_rule"):
+            self._managed_rule = conf.WORKOS_GET_MANAGED_RULE(self.request)
+        return self._managed_rule
+
+    def test_func(self):
+        if not conf.WORKOS_CONNECTION_MANAGER_TEST(self.request):
+            return False
+        return self.get_managed_rule() is not None
+
+
+class ConnectionStatusView(ConnectionManagerMixin, TemplateView):
+    template_name = "connections/status.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["rule"] = self.get_managed_rule()
+        ctx["connection"] = get_connection_status(ctx["rule"])
+        return ctx
+
+
+class ConnectionPortalRedirectView(ConnectionManagerMixin, RedirectView):
+    permanent = False
+
+    def get_redirect_url(self, *args, **kwargs):
+        return get_portal_link(
+            self.get_managed_rule(),
+            return_url=conf.WORKOS_PORTAL_RETURN_URL,
+            success_url=conf.WORKOS_PORTAL_SUCCESS_URL,
+        )
 
 
 class WorkosLogoutView(LogoutView):

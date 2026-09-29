@@ -6,8 +6,8 @@ from workos_login.models import LoginRule, UserLogin, LoginMethods, LogoutMethod
 
 from django.contrib import admin
 from django import forms
-from workos import client as workos_client
-from workos_login.utils import has_sandbox_credentials
+from workos_login.connections import get_connection_status
+from workos_login.utils import has_sandbox_credentials, get_client
 
 
 class LoginRuleAdminForm(forms.ModelForm):
@@ -28,7 +28,7 @@ class LoginRuleAdmin(admin.ModelAdmin):
     form = LoginRuleAdminForm
     list_display = ("name", "priority", "method")
     filter_horizontal = ("jit_groups",)
-    readonly_fields = ('portal_link',)
+    readonly_fields = ('portal_link', 'connection_status')
     fieldsets = (
         (None, {
             'fields': ('name', 'method', 'priority')
@@ -37,7 +37,7 @@ class LoginRuleAdmin(admin.ModelAdmin):
             'fields': ('email_regex', 'lookup_attributes',)
         }),
         ('SSO Options', {
-            'fields': ('connection_id', 'organization_id', 'saved_attributes', 'jit_creation_type', 'jit_groups', 'portal_link', 'auto_update', 'sso_logout_method', 'custom_logout_url')
+            'fields': ('connection_id', 'organization_id', 'connection_status', 'saved_attributes', 'jit_creation_type', 'jit_groups', 'portal_link', 'auto_update', 'sso_logout_method', 'custom_logout_url')
         }),
         ('MFA Options', {
             'fields': ('totp_organization_name',)
@@ -60,13 +60,30 @@ class LoginRuleAdmin(admin.ModelAdmin):
     def portal_link(self, obj):
         if obj and obj.organization_id:
             try:
-                portal_link = workos_client.portal.generate_link(
-                    organization=obj.organization_id, intent="sso",
+                portal_link = get_client(obj).portal.generate_link(
+                    organization_id=obj.organization_id, intent="sso",
                 )
-                return format_html("<a href='{}'>Link to WorkOS Portal</a>", portal_link["link"])
+                return format_html("<a href='{}'>Link to WorkOS Portal</a>", portal_link.link)
             except BadRequestException:
                 return _("You cannot have a portal link unless you set an Admin Portal Redirect Link")
         return _("Only available for SSO with organization ID set.")
+
+    @admin.display(
+        description='Connection Status',
+    )
+    def connection_status(self, obj):
+        if not obj or not (obj.connection_id or obj.organization_id):
+            return _("Only available for SSO with connection or organization ID set.")
+        try:
+            connection = get_connection_status(obj)
+        except BadRequestException:
+            return _("Unable to fetch connection status from WorkOS.")
+        if not connection:
+            return _("No connection configured yet.")
+        return format_html(
+            "State: {}<br>Type: {}<br>Name: {}",
+            connection.state, connection.connection_type, connection.name,
+        )
 
 
 class UserLoginAdmin(admin.ModelAdmin):

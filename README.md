@@ -95,6 +95,31 @@ You can customize this package with some settings that can be added to your `set
 | `WORKOS_VERIFICATION_EMAIL_SUBJECT_TEMPLATE`   | `email/verification_subject.txt`       | The template used for the verification email subject.                                                                                                                                                                                                                    |
 | `WORKOS_VERIFICATION_EMAIL_TEXT_TEMPLATE`      | `email/verification_body.txt`          | The template used for the verification email body when sending as plain text.                                                                                                                                                                                            |
 | `WORKOS_VERIFICATION_EMAIL_HTML_TEMPLATE`      | `email/verification_body.html`         | The template used for the verification email body when sending as html.                                                                                                                                                                                                  |
+| `WORKOS_CONNECTION_MANAGER_TEST`               | `lambda request: request.user.is_authenticated and request.user.is_staff` | Callable taking `request` and returning `True` if the current user may view/manage the self-service SSO connection views (see [Self-Service SAML Connections](#self-service-saml-connections)). Defaults to staff-only.                                                 |
+| `WORKOS_GET_MANAGED_RULE`                      | `lambda request: None`                 | Callable taking `request` and returning the `LoginRule` the current user is allowed to manage the SAML connection for, or `None`. Required to enable the self-service connection views - this package has no built-in customer/tenant model to derive this from.       |
+| `WORKOS_PORTAL_RETURN_URL`                     | `None`                                 | If set, overrides where a customer lands after leaving the WorkOS Admin Portal (see `return_url` in [WorkOS's docs](https://workos.com/docs/admin-portal/setup)).                                                                                                       |
+| `WORKOS_PORTAL_SUCCESS_URL`                    | `None`                                 | If set, overrides where a customer lands after successfully completing SSO setup in the WorkOS Admin Portal.                                                                                                                                                             |
+
+### Self-Service SAML Connections
+
+Two views let a customer configure and check the status of their own SAML SSO connection,
+without needing an internal admin to do it for them in Django admin:
+
+- `workos_connection_status` (`/accounts/connections/status/`) - shows the live state of
+  the connection for the `LoginRule` returned by `WORKOS_GET_MANAGED_RULE`.
+- `workos_connection_setup` (`/accounts/connections/setup/`) - redirects straight to a
+  freshly generated [WorkOS Admin Portal](https://workos.com/docs/admin-portal/setup) link
+  (`intent=sso`), where the customer can pick their identity provider and walk through SAML
+  setup themselves. This link expires 5 minutes after generation, which is why this is a
+  redirect view rather than a page that displays the link.
+
+Both views are denied by default (`WORKOS_CONNECTION_MANAGER_TEST` defaults to staff-only)
+until you set `WORKOS_GET_MANAGED_RULE` to resolve the correct `LoginRule` for your
+customer-facing users - for example, based on the logged-in user's own organization.
+
+Connection creation always goes through the WorkOS-hosted Admin Portal; there is currently
+no in-house form for entering IdP metadata directly, since that requires an API only
+available in a much newer version of the `workos` SDK than this package currently uses.
 
 ### Updating Templates
 
