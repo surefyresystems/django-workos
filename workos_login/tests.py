@@ -31,7 +31,7 @@ from workos_login.forms import EmailVerificationForm
 @dataclass
 class MockProfile:
     profile: dict
-    def dict(self):
+    def to_dict(self):
         return self.profile
 
 def get_profile_and_token(code, **profile_attrs):
@@ -544,7 +544,7 @@ class SelfServiceConnectionsTest(TestCase):
         self.client.force_login(self.staff)
         with override_settings(WORKOS_GET_MANAGED_RULE=lambda request: self.rule):
             with patch("workos_login.connections.get_client") as mock_get_client:
-                mock_get_client.return_value.portal.generate_link.return_value = MagicMock(
+                mock_get_client.return_value.admin_portal.generate_link.return_value = MagicMock(
                     link="https://id.workos.com/portal/abc"
                 )
                 response = self.client.get(reverse("workos_connection_setup"))
@@ -552,8 +552,8 @@ class SelfServiceConnectionsTest(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, "https://id.workos.com/portal/abc")
         mock_get_client.assert_called_once_with(self.rule)
-        mock_get_client.return_value.portal.generate_link.assert_called_once_with(
-            organization_id="org_123", intent="sso", return_url=None, success_url=None,
+        mock_get_client.return_value.admin_portal.generate_link.assert_called_once_with(
+            organization="org_123", intent="sso", return_url=None, success_url=None,
         )
 
 

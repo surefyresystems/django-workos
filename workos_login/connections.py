@@ -11,8 +11,8 @@ def get_portal_link(rule: LoginRule, return_url: Optional[str] = None, success_u
     WorkOS Admin Portal links expire 5 minutes after generation, so this must be called
     immediately before redirecting the user - never cache or email the result.
     """
-    portal_link = get_client(rule).portal.generate_link(
-        organization_id=rule.organization_id,
+    portal_link = get_client(rule).admin_portal.generate_link(
+        organization=rule.organization_id,
         intent="sso",
         return_url=return_url,
         success_url=success_url,

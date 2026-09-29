@@ -1,13 +1,13 @@
 from django.utils.html import format_html
-from workos.exceptions import BadRequestException
+from workos import BadRequestError
 from django.utils.translation import gettext_lazy as _
 import copy
 from workos_login.models import LoginRule, UserLogin, LoginMethods, LogoutMethods
 
 from django.contrib import admin
 from django import forms
-from workos_login.connections import get_connection_status
-from workos_login.utils import has_sandbox_credentials, get_client
+from workos_login.connections import get_connection_status, get_portal_link
+from workos_login.utils import has_sandbox_credentials
 
 
 class LoginRuleAdminForm(forms.ModelForm):
@@ -60,11 +60,9 @@ class LoginRuleAdmin(admin.ModelAdmin):
     def portal_link(self, obj):
         if obj and obj.organization_id:
             try:
-                portal_link = get_client(obj).portal.generate_link(
-                    organization_id=obj.organization_id, intent="sso",
-                )
-                return format_html("<a href='{}'>Link to WorkOS Portal</a>", portal_link.link)
-            except BadRequestException:
+                link = get_portal_link(obj)
+                return format_html("<a href='{}'>Link to WorkOS Portal</a>", link)
+            except BadRequestError:
                 return _("You cannot have a portal link unless you set an Admin Portal Redirect Link")
         return _("Only available for SSO with organization ID set.")
 
@@ -76,7 +74,7 @@ class LoginRuleAdmin(admin.ModelAdmin):
             return _("Only available for SSO with connection or organization ID set.")
         try:
             connection = get_connection_status(obj)
-        except BadRequestException:
+        except BadRequestError:
             return _("Unable to fetch connection status from WorkOS.")
         if not connection:
             return _("No connection configured yet.")

@@ -17,7 +17,6 @@ from django.views.decorators.http import require_GET
 from django.contrib.auth import login as auth_login, logout as auth_logout
 from django.utils.translation import gettext_lazy as _
 
-import workos
 from requests_oauthlib import OAuth2Session
 
 # Create your views here.
@@ -33,7 +32,7 @@ from workos_login.utils import user_has_mfa_enabled, get_user_login_model, mfa_e
     pack_state, unpack_state, update_user_profile, find_user_by_email, get_users, has_user_login_model, find_user, get_client, \
     send_email_verification_code, SESSION_EMAIL_VERIFICATION_TIMESTAMP, SESSION_EMAIL_VERIFICATION_KEY, SESSION_EMAIL_VERIFICATION_USER_KEY
 
-from workos.exceptions import BadRequestException
+from workos import BadRequestError
 
 SESSION_AUTHENTICATED_USER_ID = "workos_auth_user_id"  # Stores the authenticated user id (used by MFA)
 SESSION_USER_ID = "workos_user_id"  # Store the user ID in SSO state.
@@ -184,10 +183,10 @@ class BaseCallbackView(RedirectView):
     def _get_profile(self, code, state, rule):
         try:
             client = get_client(rule)
-            profile = client.sso.get_profile_and_token(code).dict()["profile"]
-        except BadRequestException:
+            profile = client.sso.get_profile_and_token(code=code).to_dict()["profile"]
+        except BadRequestError:
             client = get_client(rule, force_sandbox=True)
-            profile = client.sso.get_profile_and_token(code).dict()["profile"]
+            profile = client.sso.get_profile_and_token(code=code).to_dict()["profile"]
 
         return profile
 
@@ -481,7 +480,7 @@ class WorkosLoginView(LoginView):
                 email=email,
                 redirect_uri=uri,
                 state=state,
-                type='MagicLink').dict()
+                type='MagicLink').to_dict()
             workos_send_magic_link.send(sender=LoginRule, user=user, link=session["link"], rule=rule)
             if not conf.WORKOS_SEND_CUSTOM_EMAIL:
                 client.passwordless.send_session(session['id'])
@@ -499,8 +498,8 @@ class WorkosLoginView(LoginView):
         elif method == LoginMethods.SAML_SSO:
             uri = conf.WORKOS_SSO_REDIRECT_URI if conf.WORKOS_SSO_REDIRECT_URI else self.request.build_absolute_uri(reverse("sso_callback"))
             authorization_url = client.sso.get_authorization_url(
-                connection_id=rule.connection_id if rule.connection_id else None,
-                organization_id=rule.organization_id if rule.organization_id else None,
+                connection=rule.connection_id if rule.connection_id else None,
+                organization=rule.organization_id if rule.organization_id else None,
                 redirect_uri=uri,
                 state=state,
             )
@@ -594,7 +593,7 @@ class MFAVerificationView(MFAPermissionMixin, LoginSuccessUrlMixin, FormView):
         if callable(message):
             message = message(get_session_user(self.request))
         client = get_client(get_session_rule(self.request))
-        self.workos_response = client.mfa.challenge_factor(authentication_factor_id=self.get_factor_id(), sms_template=message).dict()
+        self.workos_response = client.mfa.challenge_factor(self.get_factor_id(), sms_template=message).to_dict()
         return super(MFAVerificationView, self).get(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
@@ -682,7 +681,7 @@ class MFAEnrollTOTPView(LoginSuccessUrlMixin, FormView):
         if SESSION_TOTP_QR_CODE not in self.request.session:
             workos_response = client.mfa.enroll_factor(type=conf.MFA_TOTP_TYPE,
                                                                    totp_issuer=rule.totp_organization_name,
-                                                                   totp_user=user.email).dict()
+                                                                   totp_user=user.email).to_dict()
             self.request.session[SESSION_TOTP_QR_CODE] = workos_response["totp"]["qr_code"]
             self.request.session[SESSION_TOTP_SECRET] = workos_response["totp"]["secret"]
             self.request.session[SESSION_MFA_FACTOR_ID] = workos_response["id"]

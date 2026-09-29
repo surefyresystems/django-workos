@@ -12,13 +12,12 @@ from django.template.loader import render_to_string
 from django.http import HttpRequest
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from workos.exceptions import BadRequestException
+from workos import BadRequestError
 
 from workos_login.conf import conf
 from workos_login.exceptions import EmailVerificationError
 from workos_login.signals import workos_send_email_verification
 from django.db import models, transaction
-import workos
 
 from workos_login.exceptions import RelationDoesNotExist, ImproperConfigurationError
 
@@ -185,7 +184,7 @@ def verify_email_code(request: HttpRequest, entered_code: str) -> bool:
 
 
 def totp_verify_code(factor_id: str, code: str, client: WorkOSClient) -> bool:
-    challenge_id = client.mfa.challenge_factor(authentication_factor_id=factor_id).dict().get("id")
+    challenge_id = client.mfa.challenge_factor(factor_id).to_dict().get("id")
     return verify_challenge(challenge_id, code, client)
 
 
@@ -197,8 +196,8 @@ def verify_challenge(challenge_id: str, code: str, client: WorkOSClient) -> bool
     :return: True if valid, False otherwise
     """
     try:
-        response = client.mfa.verify_challenge(authentication_challenge_id=challenge_id, code=code).dict()
-    except BadRequestException as e:
+        response = client.mfa.verify_challenge(challenge_id, code=code).to_dict()
+    except BadRequestError as e:
         return False
 
     if not response.get("valid", False):
