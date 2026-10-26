@@ -5,7 +5,8 @@ from django.views.generic import TemplateView
 from .forms import WorkosPasswordResetForm, WorkosSetPasswordForm
 from .views import WorkosLoginView, get_login_method, MFAVerificationView, MFAEnrollSMSView, \
     MFAEnrollTOTPView, MagicCallbackView, SSOCallbackView, MFAStartEnrollView, PingSSOCallbackView, \
-    EmailVerificationView, ResendEmailVerificationView, EmailMFAVerificationView, ResendEmailMFAVerificationView, WorkosLogoutView
+    EmailVerificationView, ResendEmailVerificationView, EmailMFAVerificationView, ResendEmailMFAVerificationView, \
+    WorkosLogoutView, ConnectionStatusView, ConnectionPortalRedirectView
 from django.contrib.auth import views as auth_views
 
 urlpatterns = [
@@ -25,6 +26,8 @@ urlpatterns = [
     path("resend_email_verification/", ResendEmailVerificationView.as_view(), name="resend_email_verification"),
     path('email-mfa-verify/', EmailMFAVerificationView.as_view(), name='email_mfa_verify'),
     path('resend-email-mfa/', ResendEmailMFAVerificationView.as_view(), name='resend_email_mfa'),
+    path('connections/status/', ConnectionStatusView.as_view(), name="workos_connection_status"),
+    path('connections/setup/', ConnectionPortalRedirectView.as_view(), name="workos_connection_setup"),
     path(
         "password_change/", auth_views.PasswordChangeView.as_view(), name="password_change"
     ),

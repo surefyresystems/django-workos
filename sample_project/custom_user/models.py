@@ -15,9 +15,9 @@ from workos_login.signals import workos_send_magic_link
 class Address(models.Model):
     class Meta:
         ordering = ['id']
-        index_together = (
-            ("content_type", "object_id")
-        )
+        indexes = [
+            models.Index(fields=["content_type", "object_id"]),
+        ]
 
     content_type = models.ForeignKey(ContentType, on_delete=models.SET_NULL, blank=True, null=True)
     object_id = models.PositiveIntegerField(blank=True, null=True)

@@ -1,0 +1,33 @@
+{% extends 'registration/base_registration.html' %}
+{% load i18n %}
+
+{% block card_header %}
+  <h2>{% trans "SSO Connection" %}</h2>
+{% endblock %}
+
+{% block card_body %}
+  {% if connection %}
+    <dl class="row">
+      <dt class="col-sm-4">{% trans "Status" %}</dt>
+      <dd class="col-sm-8">{{ connection.state }}</dd>
+
+      <dt class="col-sm-4">{% trans "Type" %}</dt>
+      <dd class="col-sm-8">{{ connection.connection_type }}</dd>
+
+      <dt class="col-sm-4">{% trans "Name" %}</dt>
+      <dd class="col-sm-8">{{ connection.name }}</dd>
+
+      <dt class="col-sm-4">{% trans "Last updated" %}</dt>
+      <dd class="col-sm-8">{{ connection.updated_at }}</dd>
+    </dl>
+  {% else %}
+    <p>{% trans "You haven't configured a SAML SSO connection yet." %}</p>
+  {% endif %}
+  <a href="{% url 'workos_connection_setup' %}" class="btn btn-primary">
+    {% if connection %}
+      {% trans "Manage connection in WorkOS" %}
+    {% else %}
+      {% trans "Set up SSO" %}
+    {% endif %}
+  </a>
+{% endblock %}

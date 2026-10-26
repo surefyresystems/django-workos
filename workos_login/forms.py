@@ -2,11 +2,10 @@ from django.contrib.auth.forms import AuthenticationForm, UsernameField, Passwor
 from django import forms
 from django.core.exceptions import ObjectDoesNotExist
 from django.utils.translation import gettext_lazy as _
-from workos.exceptions import BadRequestException, ServerException
+from workos import BadRequestError, ServerError
 
 from workos_login.conf import conf
 from django.core.exceptions import ValidationError
-import workos
 
 from workos_login.exceptions import EmailVerificationError
 from workos_login.models import LoginRule
@@ -120,14 +119,14 @@ class MFAEnrollFormSMS(BootstrapMixin, forms.Form):
         
     def clean_phone_number(self):
         try:
-            response = self.client.mfa.enroll_factor(type=conf.MFA_SMS_TYPE, phone_number=self.cleaned_data["phone_number"]).dict()
-        except BadRequestException as e:
+            response = self.client.mfa.enroll_factor(type=conf.MFA_SMS_TYPE, phone_number=self.cleaned_data["phone_number"]).to_dict()
+        except BadRequestError as e:
             try:
                 message = e.message
             except AttributeError:
                 message = "Error, please try again"
             raise ValidationError(message)
-        except ServerException:
+        except ServerError:
             message = _("Unknown error, please try again")
             raise ValidationError(message)
         
