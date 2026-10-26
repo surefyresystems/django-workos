@@ -97,6 +97,7 @@ You can customize this package with some settings that can be added to your `set
 | `WORKOS_VERIFICATION_EMAIL_HTML_TEMPLATE`      | `email/verification_body.html`         | The template used for the verification email body when sending as html.                                                                                                                                                                                                  |
 | `WORKOS_CONNECTION_MANAGER_TEST`               | `lambda request: request.user.is_authenticated and request.user.is_staff` | Callable taking `request` and returning `True` if the current user may view/manage the self-service SSO connection views (see [Self-Service SAML Connections](#self-service-saml-connections)). Defaults to staff-only.                                                 |
 | `WORKOS_GET_MANAGED_RULE`                      | `lambda request: None`                 | Callable taking `request` and returning the `LoginRule` the current user is allowed to manage the SAML connection for, or `None`. Required to enable the self-service connection views - this package has no built-in customer/tenant model to derive this from.       |
+| `WORKOS_ENABLE_CREATE_CONNECTION`              | `False`                                | Enables the **Create Connection via API** action on the `LoginRule` admin (see [Self-Service SAML Connections](#self-service-saml-connections)). Disabled by default because WorkOS must enable the Connections API for each environment (sandbox and production) before it accepts these requests; contact WorkOS support to enable it.                |
 | `WORKOS_PORTAL_RETURN_URL`                     | `None`                                 | If set, overrides where a customer lands after leaving the WorkOS Admin Portal (see `return_url` in [WorkOS's docs](https://workos.com/docs/admin-portal/setup)).                                                                                                       |
 | `WORKOS_PORTAL_SUCCESS_URL`                    | `None`                                 | If set, overrides where a customer lands after successfully completing SSO setup in the WorkOS Admin Portal.                                                                                                                                                             |
 
@@ -117,9 +118,24 @@ Both views are denied by default (`WORKOS_CONNECTION_MANAGER_TEST` defaults to s
 until you set `WORKOS_GET_MANAGED_RULE` to resolve the correct `LoginRule` for your
 customer-facing users - for example, based on the logged-in user's own organization.
 
-Connection creation always goes through the WorkOS-hosted Admin Portal; there is currently
-no in-house form for entering IdP metadata directly, since that requires an API only
-available in a much newer version of the `workos` SDK than this package currently uses.
+The WorkOS-hosted Admin Portal (`portal_link`/`workos_connection_setup` above) remains the
+recommended way to set up a connection - it walks the customer through their specific
+identity provider's setup steps. For customers who already have their IdP metadata in
+hand, and `WORKOS_ENABLE_CREATE_CONNECTION` is set to `True`, `LoginRuleAdmin` also exposes a **Create Connection via API** action directly on the
+`LoginRule` change page in Django admin (next to the Portal Link and Connection Status
+fields), which calls WorkOS's `create_connection` API directly - no redirect required.
+It accepts either an IdP metadata URL, or the manual `IdP Entity ID` / `IdP SSO URL` /
+`IdP Signing Certificate` trio. It's SAML-only (no OIDC), only available while
+`organization_id` is set and no connection exists yet for that organization (WorkOS's
+`create_connection` doesn't dedupe by organization, so calling it twice would create two
+independent connections - the action is hidden/blocked once one exists), and doesn't
+support editing or rotating an existing connection's certificate (that requires separate
+WorkOS endpoints this package doesn't wrap).
+
+To customize the page, override the template `admin/workos_login/loginrule/create_connection.html`
+in your project. To change the form itself (labels, help text, connection type choices,
+validation), subclass `CreateSAMLConnectionForm`, then unregister the package's
+`LoginRuleAdmin` and register a subclass that sets `create_connection_form_class` to your form.
 
 ### Updating Templates
 

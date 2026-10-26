@@ -179,6 +179,15 @@ class Settings:
         return getattr(settings, "WORKOS_GET_MANAGED_RULE", lambda request: None)
 
     @property
+    def WORKOS_ENABLE_CREATE_CONNECTION(self) -> bool:
+        """
+        Enables creating SAML connections through the WorkOS Connections API from the
+        LoginRule admin. Disabled by default because WorkOS must enable the Connections API
+        for each environment (sandbox and production) before it will accept these requests.
+        """
+        return getattr(settings, "WORKOS_ENABLE_CREATE_CONNECTION", False)
+
+    @property
     def WORKOS_PORTAL_RETURN_URL(self) -> Optional[str]:
         return getattr(settings, "WORKOS_PORTAL_RETURN_URL", None)
 
