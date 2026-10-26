@@ -7,7 +7,6 @@ from django.urls import path, reverse
 from django.utils.html import format_html
 from workos import BadRequestError, TransportError, WorkOSError
 from django.utils.translation import gettext_lazy as _
-import copy
 from workos_login.models import LoginRule, UserLogin, LoginMethods, LogoutMethods
 
 from django.contrib import admin
@@ -70,33 +69,28 @@ class LoginRuleAdmin(admin.ModelAdmin):
     list_display = ("name", "priority", "method")
     filter_horizontal = ("jit_groups",)
     readonly_fields = ('portal_link', 'connection_status', 'create_connection_link')
-    fieldsets = (
-        (None, {
-            'fields': ('name', 'method', 'priority')
-        }),
-        ('Users this rule applies to', {
-            'fields': ('email_regex', 'lookup_attributes',)
-        }),
-        ('SSO Options', {
-            'fields': ('connection_id', 'organization_id', 'connection_status', 'saved_attributes', 'jit_creation_type', 'jit_groups', 'portal_link', 'create_connection_link', 'auto_update', 'sso_logout_method', 'custom_logout_url')
-        }),
-        ('MFA Options', {
-            'fields': ('totp_organization_name',)
-        }),
-    )
 
-    def get_fieldsets(self, request, obj=None, *args, **kwargs):
-        fieldset = copy.deepcopy(super().get_fieldsets(request, obj))
+    def get_fieldsets(self, request, obj=None):
+        general = ["name", "method", "priority"]
         # If there are no sandbox credentials - leave the default of production only
         if has_sandbox_credentials():
-            fieldset[0][1]["fields"] += ("environment",)
+            general.append("environment")
         # Only show email validation option for username/password rules
         if obj and obj.method == LoginMethods.USERNAME:
-            fieldset[0][1]["fields"] += ("require_validated_email",)
-        if not conf.WORKOS_ENABLE_CREATE_CONNECTION:
-            for _name, options in fieldset:
-                options["fields"] = tuple(f for f in options["fields"] if f != "create_connection_link")
-        return fieldset
+            general.append("require_validated_email")
+
+        sso = ["connection_id", "organization_id", "connection_status", "saved_attributes",
+               "jit_creation_type", "jit_groups", "portal_link"]
+        if conf.WORKOS_ENABLE_CREATE_CONNECTION:
+            sso.append("create_connection_link")
+        sso += ["auto_update", "sso_logout_method", "custom_logout_url"]
+
+        return (
+            (None, {"fields": general}),
+            ("Users this rule applies to", {"fields": ("email_regex", "lookup_attributes")}),
+            ("SSO Options", {"fields": sso}),
+            ("MFA Options", {"fields": ("totp_organization_name",)}),
+        )
 
     def get_urls(self):
         urls = super().get_urls()
